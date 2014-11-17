@@ -45,6 +45,9 @@ import org.osgi.framework.BundleContext;
 import org.osgi.framework.Constants;
 import org.osgi.framework.ServiceReference;
 import org.osgi.service.component.ComponentContext;
+import org.osgi.service.component.annotations.Modified;
+
+import com.google.common.collect.ImmutableMap;
 
 public class ReflectionServiceUtilTest {
 
@@ -78,18 +81,38 @@ public class ReflectionServiceUtilTest {
         assertEquals(1, references2.size());
         assertSame(service2, references2.get(0));
 
-        List<ServiceInterface3> references3 = service3.getReferences3();
+        List<ServiceSuperInterface3> references3 = service3.getReferences3();
         assertEquals(1, references3.size());
         assertSame(service2, references3.get(0));
 
         List<Map<String, Object>> reference3Configs = service3.getReference3Configs();
         assertEquals(1, reference3Configs.size());
         assertEquals(200, reference3Configs.get(0).get(Constants.SERVICE_RANKING));
-
+        
         assertTrue(MockOsgi.deactivate(service3));
         assertNull(service3.getComponentContext());
     }
 
+    @Test
+    public void testService3_Config() {
+        BundleContext bundleContext = MockOsgi.newBundleContext();
+        
+        Map<String,Object> initialProperites = ImmutableMap.<String, Object>of("prop1", "value1");
+
+        Service3 service3 = new Service3();
+        MockOsgi.activate(service3, bundleContext, initialProperites);
+        assertEquals(initialProperites, service3.getConfig());
+        
+        Map<String,Object> newProperties = ImmutableMap.<String, Object>of("prop2", "value2");
+        MockOsgi.modified(service3, bundleContext, newProperties);
+        assertEquals(newProperties, service3.getConfig());
+
+        newProperties = ImmutableMap.<String, Object>of("prop3", "value3");
+        Dictionary<String,Object> newPropertiesDictonary = new Hashtable<String,Object>(newProperties);
+        MockOsgi.modified(service3, bundleContext, newPropertiesDictonary);
+        assertEquals(newProperties, service3.getConfig());
+    }
+    
     @Test
     public void testService4() {
         Service4 service4 = new Service4();
@@ -100,6 +123,26 @@ public class ReflectionServiceUtilTest {
         assertSame(service1, service4.getReference1());
     }
 
+    @Test(expected=NoScrMetadataException.class)
+    public void testInjectServicesNoMetadata() {
+        MockOsgi.injectServices(new Object(), MockOsgi.newBundleContext());
+    }
+    
+    @Test(expected=NoScrMetadataException.class)
+    public void testActivateNoMetadata() {
+        MockOsgi.activate(new Object());
+    }
+    
+    @Test(expected=NoScrMetadataException.class)
+    public void testDeactivateNoMetadata() {
+        MockOsgi.deactivate(new Object());
+    }
+    
+    @Test(expected=NoScrMetadataException.class)
+    public void testModifiedNoMetadata() {
+        MockOsgi.modified(new Object(), MockOsgi.newBundleContext(), ImmutableMap.<String,Object>of());
+    }
+    
     public interface ServiceInterface1 {
         // no methods
     }
@@ -108,7 +151,11 @@ public class ReflectionServiceUtilTest {
         // no methods
     }
 
-    public interface ServiceInterface3 {
+    public interface ServiceInterface3 extends ServiceSuperInterface3 {
+        // no methods
+    }
+
+    public interface ServiceSuperInterface3 {
         // no methods
     }
 
@@ -136,19 +183,27 @@ public class ReflectionServiceUtilTest {
         private List<ServiceReference> references2 = new ArrayList<ServiceReference>();
 
         @Reference(name = "reference3", referenceInterface = ServiceInterface3.class, cardinality = ReferenceCardinality.OPTIONAL_MULTIPLE)
-        private List<ServiceInterface3> references3 = new ArrayList<ServiceInterface3>();
+        private List<ServiceSuperInterface3> references3 = new ArrayList<ServiceSuperInterface3>();
         private List<Map<String, Object>> reference3Configs = new ArrayList<Map<String, Object>>();
 
         private ComponentContext componentContext;
+        private Map<String, Object> config;
 
+        @SuppressWarnings("unchecked")
         @Activate
         private void activate(ComponentContext ctx) {
             this.componentContext = ctx;
+            this.config = MapUtil.toMap(ctx.getProperties());
         }
 
         @Deactivate
         private void deactivate(ComponentContext ctx) {
             this.componentContext = null;
+        }
+        
+        @Modified
+        private void modified(Map<String,Object> newConfig) {
+            this.config = newConfig;
         }
 
         public ServiceInterface1 getReference1() {
@@ -163,7 +218,7 @@ public class ReflectionServiceUtilTest {
             return services;
         }
 
-        public List<ServiceInterface3> getReferences3() {
+        public List<ServiceSuperInterface3> getReferences3() {
             return this.references3;
         }
 
@@ -173,6 +228,10 @@ public class ReflectionServiceUtilTest {
 
         public ComponentContext getComponentContext() {
             return this.componentContext;
+        }
+        
+        public Map<String, Object> getConfig() {
+            return config;
         }
 
         protected void bindReference1(ServiceInterface1 service) {
@@ -191,12 +250,12 @@ public class ReflectionServiceUtilTest {
             references2.remove(serviceReference);
         }
 
-        protected void bindReference3(ServiceInterface3 service, Map<String, Object> serviceConfig) {
+        protected void bindReference3(ServiceSuperInterface3 service, Map<String, Object> serviceConfig) {
             references3.add(service);
             reference3Configs.add(serviceConfig);
         }
 
-        protected void unbindReference3(ServiceInterface3 service, Map<String, Object> serviceConfig) {
+        protected void unbindReference3(ServiceSuperInterface3 service, Map<String, Object> serviceConfig) {
             references3.remove(service);
             reference3Configs.remove(serviceConfig);
         }

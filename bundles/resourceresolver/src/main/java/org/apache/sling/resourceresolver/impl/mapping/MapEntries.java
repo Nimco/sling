@@ -478,9 +478,9 @@ public class MapEntries implements EventHandler {
             if (!"/".equals(path)){
                 if (path.endsWith("/jcr:content")) {
                     path =  path.substring(0, path.length() - "/jcr:content".length());
-                }  
-                resourceName = path.substring(path.lastIndexOf("/")+1);
-                path = path.substring(0, path.lastIndexOf("/"));
+                }
+                resourceName = path.substring(path.lastIndexOf("/") + 1);
+                path = ResourceUtil.getParent(path);      
             } else {
                 resourceName = "";
             }

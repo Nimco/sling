@@ -53,14 +53,17 @@ final class ReflectionServiceUtil {
      * Simulate activation or deactivation of OSGi service instance.
      * @param target Service instance.
      * @param componentContext Component context
-     * @return true if activation method was called. False if such a method did
-     *         not exist.
+     * @return true if activation/deactivation method was called. False if it failed.
      */
+    @SuppressWarnings("unchecked")
     public static boolean activateDeactivate(Object target, ComponentContext componentContext, boolean activate) {
         Class<?> targetClass = target.getClass();
 
         // get method name for activation/deactivation from osgi metadata
         Document metadata = OsgiMetadataUtil.getMetadata(targetClass);
+        if (metadata==null) {
+            throw new NoScrMetadataException(targetClass);
+        }
         String methodName;
         if (activate) {
             methodName = OsgiMetadataUtil.getActivateMethodName(targetClass, metadata);
@@ -71,32 +74,32 @@ final class ReflectionServiceUtil {
             return false;
         }
 
-        // try to find matchin activate/deactivate method and execute it
+        // try to find matching activate/deactivate method and execute it
         
         // 1. componentContext
-        Method method = getMethod(targetClass, methodName, new Class<?>[] { ComponentContext.class }, activate);
+        Method method = getMethod(targetClass, methodName, new Class<?>[] { ComponentContext.class });
         if (method != null) {
             invokeMethod(target, method, new Object[] { componentContext });
             return true;
         }
         
         // 2. bundleContext
-        method = getMethod(targetClass, methodName, new Class<?>[] { BundleContext.class }, activate);
+        method = getMethod(targetClass, methodName, new Class<?>[] { BundleContext.class });
         if (method != null) {
             invokeMethod(target, method, new Object[] { componentContext.getBundleContext() });
             return true;
         }
         
         // 3. map
-        method = getMethod(targetClass, methodName, new Class<?>[] { Map.class }, activate);
+        method = getMethod(targetClass, methodName, new Class<?>[] { Map.class });
         if (method != null) {
-            invokeMethod(target, method, new Object[] { componentContext.getProperties() });
+            invokeMethod(target, method, new Object[] { MapUtil.toMap(componentContext.getProperties()) });
             return true;
         }
         
         // 4. int (deactivation only)
         if (!activate) {
-            method = getMethod(targetClass, methodName, new Class<?>[] { int.class }, activate);
+            method = getMethod(targetClass, methodName, new Class<?>[] { int.class });
             if (method != null) {
                 invokeMethod(target, method, new Object[] { 0 });
                 return true;
@@ -105,7 +108,7 @@ final class ReflectionServiceUtil {
         
         // 5. Integer (deactivation only)
         if (!activate) {
-            method = getMethod(targetClass, methodName, new Class<?>[] { Integer.class }, activate);
+            method = getMethod(targetClass, methodName, new Class<?>[] { Integer.class });
             if (method != null) {
                 invokeMethod(target, method, new Object[] { 0 });
                 return true;
@@ -115,7 +118,7 @@ final class ReflectionServiceUtil {
         // 6. mixed arguments of componentContext, bundleContext and map
         Class<?>[] mixedArgsAllowed = activate ? new Class<?>[] { ComponentContext.class, BundleContext.class, Map.class }
                 : new Class<?>[] { ComponentContext.class, BundleContext.class, Map.class, int.class, Integer.class };
-        method = getMethodWithAnyCombinationArgs(targetClass, methodName, mixedArgsAllowed, activate);
+        method = getMethodWithAnyCombinationArgs(targetClass, methodName, mixedArgsAllowed);
         if (method != null) {
             Object[] args = new Object[method.getParameterTypes().length];
             for (int i=0; i<args.length; i++) {
@@ -126,7 +129,7 @@ final class ReflectionServiceUtil {
                     args[i] = componentContext.getBundleContext();
                 }
                 else if (method.getParameterTypes()[i] == Map.class) {
-                    args[i] = componentContext.getProperties();
+                    args[i] = MapUtil.toMap(componentContext.getProperties());
                 }
                 else if (method.getParameterTypes()[i] == int.class || method.getParameterTypes()[i] == Integer.class) {
                     args[i] = 0;
@@ -137,28 +140,84 @@ final class ReflectionServiceUtil {
         }
 
         // 7. noargs
-        method = getMethod(targetClass, methodName, new Class<?>[0], activate);
+        method = getMethod(targetClass, methodName, new Class<?>[0]);
         if (method != null) {
             invokeMethod(target, method, new Object[0]);
             return true;
         }
         
-        log.warn("Method {}(ComponentContext) not found in class {}", methodName, targetClass.getName());
+        log.warn("Method {} not found in class {}", methodName, targetClass.getName());
         return false;
     }
 
-    private static Method getMethod(Class clazz, String methodName, Class<?>[] signature, boolean activate) {
+    /**
+     * Simulate modification of configuration of OSGi service instance.
+     * @param target Service instance.
+     * @param properties Updated configuration
+     * @return true if modified method was called. False if it failed.
+     */
+    public static boolean modified(Object target, BundleContext bundleContext, Map<String,Object> properties) {
+        Class<?> targetClass = target.getClass();
+
+        // get method name for activation/deactivation from osgi metadata
+        Document metadata = OsgiMetadataUtil.getMetadata(targetClass);
+        if (metadata==null) {
+            throw new NoScrMetadataException(targetClass);
+        }
+        String methodName = OsgiMetadataUtil.getModifiedMethodName(targetClass, metadata);
+        
+        // try to find matching modified method and execute it
+        Method method = getMethod(targetClass, methodName, new Class<?>[] { Map.class });
+        if (method != null) {
+            invokeMethod(target, method, new Object[] { properties });
+            return true;
+        }
+        
+        log.warn("Method {} not found in class {}", methodName, targetClass.getName());
+        return false;
+    }
+
+    private static Method getMethod(Class clazz, String methodName, Class<?>[] types) {
         Method[] methods = clazz.getDeclaredMethods();
         for (Method method : methods) {
             if (StringUtils.equals(method.getName(), methodName)
-                    && Arrays.equals(method.getParameterTypes(), signature)) {
+                    && Arrays.equals(method.getParameterTypes(), types)) {
                 return method;
             }
+        }
+        // not found? check super classes
+        Class<?> superClass = clazz.getSuperclass();
+        if (superClass != null && superClass != Object.class) {
+            return getMethod(superClass, methodName, types);
         }
         return null;
     }
     
-    private static Method getMethodWithAnyCombinationArgs(Class clazz, String methodName, Class<?>[] types, boolean activate) {
+    private static Method getMethodWithAssignableTypes(Class clazz, String methodName, Class<?>[] types) {
+        Method[] methods = clazz.getDeclaredMethods();
+        for (Method method : methods) {
+            if (StringUtils.equals(method.getName(), methodName) && method.getParameterTypes().length==types.length) {
+                boolean foundMismatch = false;
+                for (int i=0; i<types.length; i++) {
+                    if (!method.getParameterTypes()[i].isAssignableFrom(types[i])) {
+                        foundMismatch = false;
+                        break;
+                    }
+                }
+                if (!foundMismatch) {
+                    return method;
+                }
+            }
+        }
+        // not found? check super classes
+        Class<?> superClass = clazz.getSuperclass();
+        if (superClass != null && superClass != Object.class) {
+            return getMethodWithAssignableTypes(superClass, methodName, types);
+        }
+        return null;
+    }
+    
+    private static Method getMethodWithAnyCombinationArgs(Class clazz, String methodName, Class<?>[] types) {
         Method[] methods = clazz.getDeclaredMethods();
         for (Method method : methods) {
             if (StringUtils.equals(method.getName(), methodName) && method.getParameterTypes().length > 1) {
@@ -169,6 +228,11 @@ final class ReflectionServiceUtil {
                 }
                 return method;
             }
+        }
+        // not found? check super classes
+        Class<?> superClass = clazz.getSuperclass();
+        if (superClass != null && superClass != Object.class) {
+            return getMethodWithAnyCombinationArgs(superClass, methodName, types);
         }
         return null;
     }
@@ -200,7 +264,12 @@ final class ReflectionServiceUtil {
 
         // collect all declared reference annotations on class and field level
         Class<?> targetClass = target.getClass();
-        List<Reference> references = getReferences(targetClass);
+
+        Document metadata = OsgiMetadataUtil.getMetadata(targetClass);
+        if (metadata==null) {
+            throw new NoScrMetadataException(targetClass);
+        }
+        List<Reference> references = OsgiMetadataUtil.getReferences(targetClass, metadata);
 
         // try to inject services
         boolean allInjected = true;
@@ -209,11 +278,6 @@ final class ReflectionServiceUtil {
             allInjected = allInjected && injectSuccess;
         }
         return allInjected;
-    }
-
-    private static List<Reference> getReferences(Class clazz) {
-        Document metadata = OsgiMetadataUtil.getMetadata(clazz);
-        return OsgiMetadataUtil.getReferences(clazz, metadata);
     }
 
     private static boolean injectServiceReference(Reference reference, Object target, BundleContext bundleContext) {
@@ -252,90 +316,43 @@ final class ReflectionServiceUtil {
         // try to invoke bind method
         String bindMethodName = reference.getBind();
         if (StringUtils.isNotEmpty(bindMethodName)) {
-            Method bindMethod = getFirstMethodWithNameAndSignature(targetClass, bindMethodName, new Class<?>[] { type });
+            
+            // 1. ServiceReference
+            Method bindMethod = getMethod(targetClass, bindMethodName, new Class<?>[] { ServiceReference.class });
             if (bindMethod != null) {
-                bindMethod.setAccessible(true);
                 for (ServiceInfo matchingService : matchingServices) {
-                    try {
-                        bindMethod.invoke(target, matchingService.getServiceInstance());
-                    } catch (IllegalAccessException ex) {
-                        throw new RuntimeException("Unable to invoke method " + bindMethodName + " for class "
-                                + targetClass.getName(), ex);
-                    } catch (IllegalArgumentException ex) {
-                        throw new RuntimeException("Unable to invoke method " + bindMethodName + " for class "
-                                + targetClass.getName(), ex);
-                    } catch (InvocationTargetException ex) {
-                        throw new RuntimeException("Unable to invoke method " + bindMethodName + " for class "
-                                + targetClass.getName(), ex.getCause());
-                    }
+                    invokeMethod(target, bindMethod, new Object[] { matchingService.getServiceReference() });
                 }
                 return true;
-            } else {
-                Method bindMethodWithConfig = getFirstMethodWithNameAndSignature(targetClass, bindMethodName,
-                        new Class<?>[] { type, Map.class });
-                if (bindMethodWithConfig != null) {
-                    bindMethodWithConfig.setAccessible(true);
-                    for (ServiceInfo matchingService : matchingServices) {
-                        try {
-                            bindMethodWithConfig.invoke(target, matchingService.getServiceInstance(),
-                                    matchingService.getServiceConfig());
-                        } catch (IllegalAccessException ex) {
-                            throw new RuntimeException("Unable to invoke method " + bindMethodName + " for class "
-                                    + targetClass.getName(), ex);
-                        } catch (IllegalArgumentException ex) {
-                            throw new RuntimeException("Unable to invoke method " + bindMethodName + " for class "
-                                    + targetClass.getName(), ex);
-                        } catch (InvocationTargetException ex) {
-                            throw new RuntimeException("Unable to invoke method " + bindMethodName + " for class "
-                                    + targetClass.getName(), ex.getCause());
-                        }
-                    }
-                    return true;
-                } else {
-                    Method bindMethodServiceReference = getFirstMethodWithNameAndSignature(targetClass, bindMethodName,
-                            new Class<?>[] { ServiceReference.class });
-                    if (bindMethodServiceReference != null) {
-                        bindMethodServiceReference.setAccessible(true);
-                        for (ServiceInfo matchingService : matchingServices) {
-                            if (matchingService.getServiceReference() != null) {
-                                try {
-                                    bindMethodServiceReference.invoke(target, matchingService.getServiceReference());
-                                } catch (IllegalAccessException ex) {
-                                    throw new RuntimeException("Unable to invoke method " + bindMethodName
-                                            + " for class " + targetClass.getName(), ex);
-                                } catch (IllegalArgumentException ex) {
-                                    throw new RuntimeException("Unable to invoke method " + bindMethodName
-                                            + " for class " + targetClass.getName(), ex);
-                                } catch (InvocationTargetException ex) {
-                                    throw new RuntimeException("Unable to invoke method " + bindMethodName
-                                            + " for class " + targetClass.getName(), ex.getCause());
-                                }
-                            }
-                        }
-                        return true;
-                    }
+            }
+            
+            // 2. assignable from service instance
+            Class<?> interfaceType;
+            try {
+                interfaceType = Class.forName(reference.getInterfaceType());
+            } catch (ClassNotFoundException e) {
+                throw new RuntimeException("Service reference type not found: " + reference.getInterfaceType());
+            }
+            bindMethod = getMethodWithAssignableTypes(targetClass, bindMethodName, new Class<?>[] { interfaceType });
+            if (bindMethod != null) {
+                for (ServiceInfo matchingService : matchingServices) {
+                    invokeMethod(target, bindMethod, new Object[] { matchingService.getServiceInstance() });
                 }
+                return true;
+            }
+            
+            // 3. assignable from service instance plus map
+            bindMethod = getMethodWithAssignableTypes(targetClass, bindMethodName, new Class<?>[] { interfaceType, Map.class });
+            if (bindMethod != null) {
+                for (ServiceInfo matchingService : matchingServices) {
+                    invokeMethod(target, bindMethod, new Object[] { matchingService.getServiceInstance(), matchingService.getServiceConfig() });
+                }
+                return true;
             }
         }
 
         log.warn("Bind method not found for reference '{}' for class {}", reference.getName(), targetClass.getName());
         return false;
-    }
-
-    private static Method getFirstMethodWithNameAndSignature(Class<?> clazz, String methodName, Class<?>[] signature) {
-        Method[] methods = clazz.getDeclaredMethods();
-        for (Method method : methods) {
-            if (StringUtils.equals(method.getName(), methodName)
-                    && Arrays.equals(method.getParameterTypes(), signature)) {
-                return method;
-            }
-        }
-        // not found? check super classes
-        Class<?> superClass = clazz.getSuperclass();
-        if (superClass != null && superClass != Object.class) {
-            return getFirstMethodWithNameAndSignature(superClass, methodName, signature);
-        }
-        return null;
     }
 
     private static List<ServiceInfo> getMatchingServices(Class<?> type, BundleContext bundleContext) {
