@@ -221,7 +221,9 @@
         <!-- Testing Samples -->
         <module>testing/samples/sample-tests</module>
         <module>testing/samples/failing-tests</module>
-        <module>testing/samples/integration-tests</module>
+        <!-- Disable org.apache.sling.testing.samples.integrationtests for jenkins build
+        <module>testing/samples/integration-tests</module> 
+        -->
     </modules>
 
     <profiles>
