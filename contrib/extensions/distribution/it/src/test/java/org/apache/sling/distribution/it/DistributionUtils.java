@@ -28,7 +28,7 @@ import org.apache.http.NameValuePair;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.entity.ByteArrayEntity;
 import org.apache.http.message.BasicNameValuePair;
-import org.apache.sling.distribution.communication.DistributionActionType;
+import org.apache.sling.distribution.communication.DistributionRequestType;
 import org.apache.sling.distribution.communication.DistributionParameter;
 import org.apache.sling.testing.tools.http.Request;
 import org.apache.sling.testing.tools.sling.SlingClient;
@@ -46,7 +46,7 @@ public class DistributionUtils {
     private static final String JSON_SELECTOR = ".json";
     private static final String DISTRIBUTION_ROOT_PATH = "/libs/sling/distribution";
 
-    private static String assertPostResourceWithParameters(SlingInstance slingInstance,
+    public static String assertPostResourceWithParameters(SlingInstance slingInstance,
                                                            int status, String path, String... parameters) throws IOException {
         Request request = slingInstance.getRequestBuilder().buildPostRequest(path);
 
@@ -82,11 +82,6 @@ public class DistributionUtils {
     }
 
 
-    public static void setAgentProperties(SlingInstance slingInstance, String agentName, String... properties) throws IOException {
-        assertPostResourceWithParameters(slingInstance, 200, agentConfigUrl(agentName),
-                properties);
-    }
-
 
     public static void assertResponseContains(SlingInstance slingInstance,
                                               String resource, String... parameters) throws IOException {
@@ -107,13 +102,13 @@ public class DistributionUtils {
     }
 
 
-    public static void distribute(SlingInstance slingInstance, String agentName, DistributionActionType action, String... paths) throws IOException {
+    public static void distribute(SlingInstance slingInstance, String agentName, DistributionRequestType action, String... paths) throws IOException {
         String agentResource = agentUrl(agentName);
 
         executeDistributionRequest(slingInstance, 202, agentResource, action, paths);
     }
 
-    public static String executeDistributionRequest(SlingInstance slingInstance, int status, String resource, DistributionActionType action, String... paths) throws IOException {
+    public static String executeDistributionRequest(SlingInstance slingInstance, int status, String resource, DistributionRequestType action, String... paths) throws IOException {
 
         List<String> args = new ArrayList<String>();
         args.add(DistributionParameter.ACTION.toString());
@@ -129,7 +124,7 @@ public class DistributionUtils {
         return assertPostResourceWithParameters(slingInstance, status, resource, args.toArray(new String[args.size()]));
     }
 
-    public static String doExport(SlingInstance slingInstance, String exporterName, DistributionActionType action, String... paths) throws IOException {
+    public static String doExport(SlingInstance slingInstance, String exporterName, DistributionRequestType action, String... paths) throws IOException {
         String agentResource = exporterUrl(exporterName);
 
         return executeDistributionRequest(slingInstance, 200, agentResource, action, paths);
@@ -182,8 +177,12 @@ public class DistributionUtils {
         return agentUrl(agentName) + "/queue";
     }
 
-    public static String agentConfigUrl(String agentName) {
-        return DISTRIBUTION_ROOT_PATH + "/settings/agents/" + agentName;
+    public static String authorAgentConfigUrl(String agentName) {
+        return DISTRIBUTION_ROOT_PATH + "/settings.author/agents/" + agentName;
+    }
+
+    public static String publishAgentConfigUrl(String agentName) {
+        return DISTRIBUTION_ROOT_PATH + "/settings.publish/agents/" + agentName;
     }
 
 

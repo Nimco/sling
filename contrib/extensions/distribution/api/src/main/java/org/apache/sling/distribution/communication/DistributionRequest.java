@@ -22,28 +22,25 @@ import javax.annotation.Nonnull;
 import java.util.Arrays;
 
 /**
- * A distribution request
+ * A {@link org.apache.sling.distribution.communication.DistributionRequest} represents the need from the caller to have
+ * some content being distributed from a source instance to a target instance.
  */
-public class DistributionRequest {
+public final class DistributionRequest {
 
     private final long time;
 
-    private final DistributionActionType action;
+    private final DistributionRequestType actionType;
 
     private final String[] paths;
 
-    public DistributionRequest(@Nonnull DistributionActionType action, @Nonnull String... paths) {
-        this(System.currentTimeMillis(), action, paths);
-    }
-
-    public DistributionRequest(long time, @Nonnull DistributionActionType action, @Nonnull String... paths) {
-        this.time = time;
-        this.action = action;
+    public DistributionRequest(@Nonnull DistributionRequestType actionType, @Nonnull String... paths) {
+        this.time = System.currentTimeMillis();
+        this.actionType = actionType;
         this.paths = paths;
     }
 
     /**
-     * get the time this distribution request was created
+     * get the time this distribution request was created as a {@code long} returned by {@code System#currentTimeMillis}.
      *
      * @return the distribution request creation time as returned by {@code System#currentTimeMillis}
      */
@@ -52,12 +49,12 @@ public class DistributionRequest {
     }
 
     /**
-     * get the {@link DistributionActionType} associated with this request
+     * get the {@link DistributionRequestType} associated with this request
      *
-     * @return the action as a {@link org.apache.sling.distribution.communication.DistributionActionType}
+     * @return the type of actionType for request as a {@link DistributionRequestType}
      */
-    public DistributionActionType getActionType() {
-        return action;
+    public DistributionRequestType getRequestType() {
+        return actionType;
     }
 
     /**
@@ -73,7 +70,7 @@ public class DistributionRequest {
     public String toString() {
         return "DistributionRequest{" +
                 "time=" + time +
-                ", action=" + action +
+                ", actionType=" + actionType +
                 ", paths=" + Arrays.toString(paths) +
                 '}';
     }

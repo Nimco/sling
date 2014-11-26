@@ -24,24 +24,22 @@ import java.io.InputStream;
 
 import aQute.bnd.annotation.ConsumerType;
 import org.apache.sling.api.resource.ResourceResolver;
-import org.apache.sling.distribution.component.DistributionComponent;
 
 /**
  * A {@link DistributionPackageImporter} is responsible for importing
  * {@link DistributionPackage}s into the resource tree.
  */
 @ConsumerType
-public interface DistributionPackageImporter extends DistributionComponent {
+public interface DistributionPackageImporter {
 
     /**
      * Imports the given distribution package into the underlying system
      *
-     * @param resourceResolver   - the resource resolver used to import the resources
+     * @param resourceResolver    - the resource resolver used to import the resources
      * @param distributionPackage - the package to be imported
-     * @return <code>true</code> if the import succeeded, <code>false</code> otherwise
      * @throws DistributionPackageImportException if any error occurs during import
      */
-    boolean importPackage(@Nonnull ResourceResolver resourceResolver, @Nonnull DistributionPackage distributionPackage) throws DistributionPackageImportException;
+    void importPackage(@Nonnull ResourceResolver resourceResolver, @Nonnull DistributionPackage distributionPackage) throws DistributionPackageImportException;
 
     /**
      * Tries to convert an {@link java.io.InputStream} to a {@link DistributionPackage} and then imports it into the underlying system

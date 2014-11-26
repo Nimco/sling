@@ -16,41 +16,100 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 package org.apache.sling.distribution.packaging;
 
+import javax.annotation.CheckForNull;
+import java.net.URI;
+import java.util.Arrays;
+
+import org.apache.sling.distribution.communication.DistributionRequestType;
 
 /**
  * Additional information about a package.
  * Additional information is optional and components should expect every piece of it to be null.
  */
-public class DistributionPackageInfo {
+public final class DistributionPackageInfo {
 
-    private String origin;
+    private URI origin;
+    private DistributionRequestType requestType;
+    private String[] paths;
 
     /**
-     * retrieves the origin of the package.
+     * get the paths covered by the package holding this info
+     *
+     * @return an array of paths
+     */
+    @CheckForNull
+    public String[] getPaths() {
+        return paths;
+    }
+
+    /**
+     * get the request type associated to the package holding this info
+     *
+     * @return the request type
+     */
+    @CheckForNull
+    public DistributionRequestType getRequestType() {
+        return requestType;
+    }
+
+    /**
+     * retrieves the origin of the package holding this info
+     *
      * @return the package origin
      */
-    public String getOrigin() {
+    @CheckForNull
+    public URI getOrigin() {
         return origin;
     }
 
     /**
      * sets the origin of the package.
+     *
      * @param origin the originating instance of this package
      */
-    public void setOrigin(String origin) {
+    public void setOrigin(URI origin) {
         this.origin = origin;
     }
 
     /**
+     * sets the request type for the package holding this info
+     *
+     * @param requestType the request type that originated this package
+     */
+    public void setRequestType(DistributionRequestType requestType) {
+        this.requestType = requestType;
+    }
+
+    /**
+     * sets the paths "covered" by the package holding this info
+     *
+     * @param paths the paths "covered" by this package
+     */
+    public void setPaths(String[] paths) {
+        this.paths = paths;
+    }
+
+    /**
      * fills the current info object from the provided one.
+     *
      * @param packageInfo package metadata
      */
     public void fillInfo(DistributionPackageInfo packageInfo) {
         if (packageInfo != null) {
             this.setOrigin(packageInfo.getOrigin());
+            this.setPaths(packageInfo.getPaths());
+            this.setRequestType(packageInfo.getRequestType());
         }
+    }
+
+    @Override
+    public String toString() {
+        return "DistributionPackageInfo{" +
+                "origin=" + origin +
+                ", requestType=" + requestType +
+                ", paths=" + Arrays.toString(paths) +
+                '}';
     }
 }

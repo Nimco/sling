@@ -21,17 +21,16 @@ package org.apache.sling.distribution.trigger;
 import javax.annotation.Nonnull;
 
 import aQute.bnd.annotation.ConsumerType;
-import org.apache.sling.distribution.component.DistributionComponent;
 
 /**
  * A {@link DistributionTrigger} is responsible to trigger
  * {@link org.apache.sling.distribution.communication.DistributionRequest}s upon certain 'events' (e.g. Sling / Jcr events,
- * periodic polling, etc.).
+ * periodic pulling, etc.).
  * A {@link DistributionTrigger} is meant to be stateless so that more than one
  * {@link DistributionRequestHandler} can be registered into the same trigger.
  */
 @ConsumerType
-public interface DistributionTrigger extends DistributionComponent {
+public interface DistributionTrigger {
 
     /**
      * register a request handler to be triggered and returns a corresponding registration id

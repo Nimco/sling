@@ -19,7 +19,6 @@
 package org.apache.sling.distribution.transport.authentication;
 
 import aQute.bnd.annotation.ConsumerType;
-import org.apache.sling.distribution.component.DistributionComponent;
 
 /**
  * A {@link org.apache.sling.distribution.transport.authentication.TransportAuthenticationProvider} is responsible for
@@ -29,13 +28,13 @@ import org.apache.sling.distribution.component.DistributionComponent;
  *
  */
 @ConsumerType
-public interface TransportAuthenticationProvider<A, T> extends DistributionComponent {
+public interface TransportAuthenticationProvider<A, T> {
 
     /**
      * Check if this provider is able to authenticate objects belonging to given 'authenticable' class.
      *
      * @param authenticable class of objects to be authenticated
-     * @return <code>true</code> if this provider can check authentication on instances of this class, <code>false</code>
+     * @return {@code true} if this provider can check authentication on instances of this class, {@code false}
      * otherwise
      */
     boolean canAuthenticate(Class<A> authenticable);

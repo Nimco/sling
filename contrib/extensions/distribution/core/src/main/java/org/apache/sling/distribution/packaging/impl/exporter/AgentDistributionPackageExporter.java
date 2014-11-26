@@ -38,17 +38,12 @@ import org.slf4j.LoggerFactory;
 public class AgentDistributionPackageExporter implements DistributionPackageExporter {
     private final Logger log = LoggerFactory.getLogger(getClass());
 
-    private static final String QUEUE_NAME = "queue";
 
     private DistributionAgent agent;
     private final DistributionPackageBuilder packageBuilder;
     private String queueName;
 
-    public AgentDistributionPackageExporter(Map<String, Object> config, DistributionAgent agent, DistributionPackageBuilder packageBuilder) {
-        this (PropertiesUtil.toString(config.get(QUEUE_NAME), ""), agent, packageBuilder);
-    }
-
-    private AgentDistributionPackageExporter(String queueName, DistributionAgent agent, DistributionPackageBuilder packageBuilder) {
+    public AgentDistributionPackageExporter(String queueName, DistributionAgent agent, DistributionPackageBuilder packageBuilder) {
 
         if (agent == null || packageBuilder == null) {
             throw new IllegalArgumentException("Agent and package builder are required");
@@ -63,14 +58,15 @@ public class AgentDistributionPackageExporter implements DistributionPackageExpo
 
         List<DistributionPackage> result = new ArrayList<DistributionPackage>();
         try {
-            log.info("getting item from queue {}", queueName);
+            log.info("getting packages from queue {}", queueName);
 
             DistributionQueue queue = agent.getQueue(queueName);
             DistributionQueueItem info = queue.getHead();
             DistributionPackage distributionPackage;
             if (info != null) {
                 distributionPackage = packageBuilder.getPackage(resourceResolver, info.getId());
-                queue.remove(info.getId());
+                DistributionQueueItem item = queue.remove(info.getId());
+                log.info("item {} fetched and removed from the queue", item);
                 if (distributionPackage != null) {
                     result.add(distributionPackage);
                 }

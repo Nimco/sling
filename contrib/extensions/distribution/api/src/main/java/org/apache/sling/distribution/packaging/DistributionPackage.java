@@ -40,22 +40,6 @@ public interface DistributionPackage {
     String getId();
 
     /**
-     * get the paths covered by this package
-     *
-     * @return an array of paths
-     */
-    @Nonnull
-    String[] getPaths();
-
-    /**
-     * get the action this package is used for
-     *
-     * @return the action
-     */
-    @Nonnull
-    String getAction();
-
-    /**
      * get the type of package
      *
      * @return the package type
@@ -74,24 +58,15 @@ public interface DistributionPackage {
     InputStream createInputStream() throws IOException;
 
     /**
-     * get package stream length
-     *
-     * @return the package length
-     */
-    long getLength();
-
-    /**
      * releases all resources associated with this package
      */
     void delete();
-
 
     /**
      * gets an additional info holder for this package.
      * The additional info object contains control information rather than content information.
      * For example info.origin can be used to skip distributing back to the originating endpoint.
-     * It should not be be serialized between instances as its main purpose is to allow
-     * inter component communication on the same instance.
+     *
      * @return the associated metadata to this package
      */
     @Nonnull

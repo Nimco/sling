@@ -29,7 +29,7 @@ import org.apache.http.client.fluent.Executor;
 import org.apache.http.client.fluent.Request;
 import org.apache.http.client.fluent.Response;
 import org.apache.sling.api.resource.ResourceResolver;
-import org.apache.sling.distribution.communication.DistributionActionType;
+import org.apache.sling.distribution.communication.DistributionRequestType;
 import org.apache.sling.distribution.communication.DistributionRequest;
 import org.apache.sling.distribution.packaging.DistributionPackage;
 import org.apache.sling.distribution.packaging.DistributionPackageInfo;
@@ -66,7 +66,7 @@ public class SimpleHttpDistributionTransportHandlerTest {
                 authProvider, endpoint, packageBuilder, maxNoOfPackages);
         ResourceResolver resourceResolver = mock(ResourceResolver.class);
         DistributionPackage distributionPackage = mock(DistributionPackage.class);
-        when(distributionPackage.getInfo()).thenReturn(mock(DistributionPackageInfo.class));
+        when(distributionPackage.getInfo()).thenReturn(new DistributionPackageInfo());
         InputStream stream = mock(InputStream.class);
         when(distributionPackage.createInputStream()).thenReturn(stream);
         simpleHttpdistributionTransportHandler.deliverPackage(resourceResolver, distributionPackage);
@@ -91,7 +91,7 @@ public class SimpleHttpDistributionTransportHandlerTest {
         SimpleHttpDistributionTransportHandler simpleHttpdistributionTransportHandler = new SimpleHttpDistributionTransportHandler(
                 authProvider, endpoint, packageBuilder, maxNoOfPackages);
         ResourceResolver resourceResolver = mock(ResourceResolver.class);
-        DistributionRequest distributionRequest = new DistributionRequest(DistributionActionType.ADD, new String[]{"/"});
+        DistributionRequest distributionRequest = new DistributionRequest(DistributionRequestType.ADD, new String[]{"/"});
         List<DistributionPackage> packages = simpleHttpdistributionTransportHandler.retrievePackages(resourceResolver, distributionRequest);
         assertNotNull(packages);
         assertTrue(packages.isEmpty());
@@ -117,13 +117,13 @@ public class SimpleHttpDistributionTransportHandlerTest {
         DistributionEndpoint endpoint = new DistributionEndpoint("http://127.0.0.1:8080/some/resource");
         DistributionPackageBuilder packageBuilder = mock(DistributionPackageBuilder.class);
         DistributionPackage distributionPackage = mock(DistributionPackage.class);
-        when(distributionPackage.getInfo()).thenReturn(mock(DistributionPackageInfo.class));
+        when(distributionPackage.getInfo()).thenReturn(new DistributionPackageInfo());
         when(packageBuilder.readPackage(any(ResourceResolver.class), any(InputStream.class))).thenReturn(distributionPackage);
         int maxNoOfPackages = 1;
         SimpleHttpDistributionTransportHandler simpleHttpdistributionTransportHandler = new SimpleHttpDistributionTransportHandler(
                 authProvider, endpoint, packageBuilder, maxNoOfPackages);
         ResourceResolver resourceResolver = mock(ResourceResolver.class);
-        DistributionRequest distributionRequest = new DistributionRequest(DistributionActionType.ADD, new String[]{"/"});
+        DistributionRequest distributionRequest = new DistributionRequest(DistributionRequestType.ADD, "/");
         List<DistributionPackage> packages = simpleHttpdistributionTransportHandler.retrievePackages(resourceResolver, distributionRequest);
         assertNotNull(packages);
         assertFalse(packages.isEmpty());

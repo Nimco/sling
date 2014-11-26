@@ -92,7 +92,7 @@ public class RepositoryDistributionPackageImporter implements DistributionPackag
                         distributionPackage.getId(), addedNode.getPath());
 
                 Dictionary<Object, Object> props = new Properties();
-                props.put("path", distributionPackage.getPaths());
+                props.put("path", distributionPackage.getInfo().getPaths());
                 distributionEventFactory.generateEvent(DistributionEventType.PACKAGE_IMPORTED, props);
             } else {
                 throw new Exception("could not get a Session to deliver package to the repository");
@@ -104,8 +104,8 @@ public class RepositoryDistributionPackageImporter implements DistributionPackag
         }
     }
 
-    public boolean importPackage(@Nonnull ResourceResolver resourceResolver, @Nonnull DistributionPackage distributionPackage) throws DistributionPackageImportException {
-        return false;
+    public void importPackage(@Nonnull ResourceResolver resourceResolver, @Nonnull DistributionPackage distributionPackage) throws DistributionPackageImportException {
+        // do nothing
     }
 
     public DistributionPackage importStream(@Nonnull ResourceResolver resourceResolver, @Nonnull InputStream stream) throws DistributionPackageImportException {

@@ -18,6 +18,8 @@
  */
 package org.apache.sling.distribution.queue;
 
+import javax.annotation.Nonnull;
+
 import org.apache.sling.distribution.packaging.DistributionPackageInfo;
 
 /**
@@ -31,39 +33,37 @@ public class DistributionQueueItem {
 
     private final String id;
 
-    private final String[] paths;
-
-    private final String action;
-
     private final String type;
 
     private final DistributionPackageInfo packageInfo;
 
-    public DistributionQueueItem(String id, String[] paths, String action, String type, DistributionPackageInfo packageInfo) {
+    public DistributionQueueItem(@Nonnull String id, @Nonnull String type, @Nonnull DistributionPackageInfo packageInfo) {
         this.id = id;
-        this.paths = paths;
-        this.action = action;
         this.type = type;
         this.packageInfo = packageInfo;
     }
 
+    @Nonnull
     public String getId() {
         return id;
     }
 
-    public String[] getPaths() {
-        return paths;
-    }
-
-    public String getAction() {
-        return action;
-    }
-
+    @Nonnull
     public String getType() {
         return type;
     }
 
+    @Nonnull
     public DistributionPackageInfo getPackageInfo() {
         return packageInfo;
+    }
+
+    @Override
+    public String toString() {
+        return "DistributionQueueItem{" +
+                "id='" + id + '\'' +
+                ", type='" + type + '\'' +
+                ", packageInfo=" + packageInfo +
+                '}';
     }
 }

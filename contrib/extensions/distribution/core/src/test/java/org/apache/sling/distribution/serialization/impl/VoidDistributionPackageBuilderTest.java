@@ -22,7 +22,7 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 
 import org.apache.sling.api.resource.ResourceResolver;
-import org.apache.sling.distribution.communication.DistributionActionType;
+import org.apache.sling.distribution.communication.DistributionRequestType;
 import org.apache.sling.distribution.communication.DistributionRequest;
 import org.apache.sling.distribution.packaging.DistributionPackage;
 import org.apache.sling.distribution.serialization.DistributionPackageReadingException;
@@ -33,7 +33,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 /**
  * Testcase for {@link VoidDistributionPackageBuilder}
@@ -45,12 +44,9 @@ public class VoidDistributionPackageBuilderTest {
         VoidDistributionPackageBuilder voiddistributionPackageBuilder = new VoidDistributionPackageBuilder();
         ResourceResolver resourceResolver = mock(ResourceResolver.class);
         String[] paths = new String[0];
-        for (DistributionActionType action : DistributionActionType.values()) {
-            DistributionRequest request = mock(DistributionRequest.class);
-            when(request.getActionType()).thenReturn(action);
-            when(request.getPaths()).thenReturn(paths);
-            when(request.getTime()).thenReturn(System.currentTimeMillis());
-            DistributionPackage distributionPackage = voiddistributionPackageBuilder.createPackage(resourceResolver, request);
+        for (DistributionRequestType action : DistributionRequestType.values()) {
+            DistributionRequest distributionRequest = new DistributionRequest(action, paths);
+            DistributionPackage distributionPackage = voiddistributionPackageBuilder.createPackage(resourceResolver, distributionRequest);
             assertNotNull(distributionPackage);
         }
     }
@@ -81,7 +77,7 @@ public class VoidDistributionPackageBuilderTest {
     public void testReadPackageWithValidStream() throws Exception {
         VoidDistributionPackageBuilder voiddistributionPackageBuilder = new VoidDistributionPackageBuilder();
         ResourceResolver resourceResolver = mock(ResourceResolver.class);
-        for (DistributionActionType action : DistributionActionType.values()) {
+        for (DistributionRequestType action : DistributionRequestType.values()) {
             DistributionRequest request = new DistributionRequest(action, new String[]{"/"});
             InputStream stream = new VoidDistributionPackage(request).createInputStream();
             DistributionPackage distributionPackage = voiddistributionPackageBuilder.readPackage(resourceResolver, stream);
@@ -101,7 +97,7 @@ public class VoidDistributionPackageBuilderTest {
     public void testGetMatchingIdPackage() throws Exception {
         VoidDistributionPackageBuilder voiddistributionPackageBuilder = new VoidDistributionPackageBuilder();
         ResourceResolver resourceResolver = mock(ResourceResolver.class);
-        String id = new VoidDistributionPackage(new DistributionRequest(DistributionActionType.DELETE, new String[]{"/"})).getId();
+        String id = new VoidDistributionPackage(new DistributionRequest(DistributionRequestType.DELETE, new String[]{"/"})).getId();
         DistributionPackage distributionPackage = voiddistributionPackageBuilder.getPackage(resourceResolver, id);
         assertNotNull(distributionPackage);
     }

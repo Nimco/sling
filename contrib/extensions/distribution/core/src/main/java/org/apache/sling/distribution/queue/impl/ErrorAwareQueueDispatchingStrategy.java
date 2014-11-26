@@ -79,13 +79,16 @@ public class ErrorAwareQueueDispatchingStrategy implements DistributionQueueDisp
         timeThreshold = PropertiesUtil.toInteger(ctx.getProperties().get(TIME_THRESHOLD), 600000);
     }
 
-    public boolean add(@Nonnull DistributionPackage distributionPackage, @Nonnull DistributionQueueProvider queueProvider) throws DistributionQueueException {
-        boolean added;
+    public Iterable<DistributionQueueItemState> add(@Nonnull DistributionPackage distributionPackage,
+                                                    @Nonnull DistributionQueueProvider queueProvider) throws DistributionQueueException {
+        checkAndRemoveStuckItems(queueProvider);
         DistributionQueueItem queueItem = getItem(distributionPackage);
         DistributionQueue queue = queueProvider.getQueue(DEFAULT_QUEUE_NAME);
-        added = queue.add(queueItem);
-        checkAndRemoveStuckItems(queueProvider);
-        return added;
+        if (queue.add(queueItem)) {
+            return Arrays.asList(queue.getStatus(queueItem));
+        } else {
+            return Arrays.asList(new DistributionQueueItemState(DistributionQueueItemState.ItemState.ERROR, queue.getName()));
+        }
     }
 
     @Nonnull
@@ -113,16 +116,15 @@ public class ErrorAwareQueueDispatchingStrategy implements DistributionQueueDisp
                         throw new DistributionQueueException("could not move an item to the error queue");
                     }
                 }
-                log.warn("item {} dropped from the default queue", firstItem);
-                defaultQueue.remove(firstItem.getId());
+                if (defaultQueue.remove(firstItem.getId()) != null) {
+                    log.warn("item {} dropped from the default queue", firstItem);
+                }
             }
         }
     }
 
     private DistributionQueueItem getItem(DistributionPackage distributionPackage) {
         DistributionQueueItem distributionQueueItem = new DistributionQueueItem(distributionPackage.getId(),
-                distributionPackage.getPaths(),
-                distributionPackage.getAction(),
                 distributionPackage.getType(),
                 distributionPackage.getInfo());
 

@@ -21,7 +21,7 @@ package org.apache.sling.distribution.trigger.impl;
 import javax.jcr.RepositoryException;
 import javax.jcr.observation.Event;
 
-import org.apache.sling.distribution.communication.DistributionActionType;
+import org.apache.sling.distribution.communication.DistributionRequestType;
 import org.apache.sling.distribution.communication.DistributionRequest;
 import org.apache.sling.distribution.trigger.DistributionTrigger;
 import org.apache.sling.jcr.api.SlingRepository;
@@ -50,8 +50,8 @@ public class JcrEventDistributionTrigger extends AbstractJcrEventTrigger impleme
             if (Event.PROPERTY_REMOVED == type || Event.PROPERTY_CHANGED == type || Event.PROPERTY_ADDED == type) {
                 replicatingPath = replicatingPath.substring(0, replicatingPath.lastIndexOf('/'));
             }
-            distributionRequest = new DistributionRequest(System.currentTimeMillis(), Event.NODE_REMOVED ==
-                    type ? DistributionActionType.DELETE : DistributionActionType.ADD, replicatingPath);
+            distributionRequest = new DistributionRequest(Event.NODE_REMOVED ==
+                    type ? DistributionRequestType.DELETE : DistributionRequestType.ADD, replicatingPath);
             log.info("distributing {}", distributionRequest);
         }
         return distributionRequest;

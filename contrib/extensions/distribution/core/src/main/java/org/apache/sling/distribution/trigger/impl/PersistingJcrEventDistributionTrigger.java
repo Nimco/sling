@@ -27,9 +27,8 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
 
-import org.apache.sling.distribution.communication.DistributionActionType;
+import org.apache.sling.distribution.communication.DistributionRequestType;
 import org.apache.sling.distribution.communication.DistributionRequest;
-import org.apache.sling.distribution.component.ManagedDistributionComponent;
 import org.apache.sling.distribution.trigger.DistributionTrigger;
 import org.apache.sling.jcr.api.SlingRepository;
 import org.slf4j.Logger;
@@ -39,7 +38,7 @@ import org.slf4j.LoggerFactory;
  * {@link org.apache.sling.distribution.trigger.DistributionTrigger} that listens for certain events and persists them
  * under a specific path in the repo
  */
-public class PersistingJcrEventDistributionTrigger extends AbstractJcrEventTrigger implements DistributionTrigger, ManagedDistributionComponent {
+public class PersistingJcrEventDistributionTrigger extends AbstractJcrEventTrigger implements DistributionTrigger {
 
     private static final String DEFAULT_NUGGETS_PATH = "/var/nuggets";
 
@@ -87,7 +86,7 @@ public class PersistingJcrEventDistributionTrigger extends AbstractJcrEventTrigg
                     createdNode.setProperty("info", values.toArray(new String[values.size()]));
                     session.save();
                     log.info("event persisted at {}", path);
-                    distributionRequest = new DistributionRequest(System.currentTimeMillis(), DistributionActionType.ADD, path);
+                    distributionRequest = new DistributionRequest(DistributionRequestType.ADD, path);
                 } else {
                     log.warn("could not create node {}", nuggetsPath + "/" + nodeName);
                 }

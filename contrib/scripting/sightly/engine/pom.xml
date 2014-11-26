@@ -79,7 +79,7 @@
                     <instructions>
                         <Embed-Dependency>antlr4-runtime,org.abego.treelayout.core</Embed-Dependency>
                         <Export-Package>
-                            org.apache.sling.scripting.sightly.api;version=1.0.0
+                            org.apache.sling.scripting.sightly.api
                         </Export-Package>
                         <ScriptEngine-Name>${project.name}</ScriptEngine-Name>
                         <ScriptEngine-Version>${project.version}</ScriptEngine-Version>
@@ -253,7 +253,7 @@
         <dependency>
             <groupId>commons-io</groupId>
             <artifactId>commons-io</artifactId>
-            <version>2.0</version>
+            <version>1.4</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>
