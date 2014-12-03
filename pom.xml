@@ -182,24 +182,13 @@
         <module>bundles/extensions/explorer</module>
         <module>bundles/extensions/healthcheck</module>
         <module>bundles/resourceaccesssecurity/core</module>
-        <!--<module>bundles/resourceaccesssecurity/it</module>-->
+        <module>bundles/resourceaccesssecurity/it</module>
         <module>bundles/extensions/models/api</module>
         <module>bundles/extensions/models/impl</module>
         <module>bundles/extensions/models/integration-tests</module>
 
         <!-- Testing Support -->
-        <module>testing/tools</module>
-        <module>testing/junit/core</module>
-        <module>testing/junit/scriptable</module>
-        <module>testing/junit/healthcheck</module>
-        <module>testing/junit/remote</module>
-        <module>testing/junit/performance</module>
-        <module>testing/mocks/resourceresolver-mock</module>
-        <module>testing/mocks/jcr-mock</module>
-        <module>testing/mocks/osgi-mock</module>
-        <module>testing/mocks/sling-mock</module>
-        <module>testing/mocks/sling-mock-jackrabbit</module>
-        <module>testing/sling-pax-util</module>
+        <module>testing</module>
         
         <!-- Installer -->
         <module>installer/core</module>
@@ -218,12 +207,6 @@
         <module>launchpad/content</module>
         <module>launchpad/builder</module>
         
-        <!-- Testing Samples -->
-        <module>testing/samples/sample-tests</module>
-        <module>testing/samples/failing-tests</module>
-        <!-- Disable org.apache.sling.testing.samples.integrationtests for jenkins build
-        <module>testing/samples/integration-tests</module> 
-        -->
     </modules>
 
     <profiles>

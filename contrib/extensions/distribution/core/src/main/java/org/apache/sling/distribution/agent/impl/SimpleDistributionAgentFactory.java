@@ -18,14 +18,23 @@
  */
 package org.apache.sling.distribution.agent.impl;
 
-import java.util.*;
+import java.util.Dictionary;
+import java.util.Hashtable;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-import org.apache.felix.scr.annotations.*;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.ConfigurationPolicy;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Property;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.ReferencePolicy;
 import org.apache.sling.api.resource.ResourceResolverFactory;
 import org.apache.sling.commons.osgi.PropertiesUtil;
 import org.apache.sling.distribution.agent.DistributionAgent;
-import org.apache.sling.distribution.agent.DistributionRequestAuthorizationStrategy;
 import org.apache.sling.distribution.component.impl.DistributionComponentUtils;
 import org.apache.sling.distribution.event.impl.DistributionEventFactory;
 import org.apache.sling.distribution.packaging.DistributionPackageExporter;
@@ -55,15 +64,14 @@ import org.slf4j.LoggerFactory;
         specVersion = "1.1",
         policy = ConfigurationPolicy.REQUIRE
 )
-@Reference(name = "triggers", referenceInterface = DistributionTrigger.class, target = SimpleDistributionAgentFactory.DEFAULT_TARGET,
+@Reference(name = "triggers", referenceInterface = DistributionTrigger.class,
         policy = ReferencePolicy.DYNAMIC, cardinality = ReferenceCardinality.OPTIONAL_MULTIPLE,
         bind = "bindDistributionTrigger", unbind = "unbindDistributionTrigger")
 public class SimpleDistributionAgentFactory {
-    public static final String DEFAULT_TARGET = DistributionComponentUtils.DEFAULT_TARGET;
     private final Logger log = LoggerFactory.getLogger(getClass());
 
     @Property(label = "Name")
-    public static final String NAME = DistributionComponentUtils.NAME;
+    public static final String NAME = DistributionComponentUtils.PN_NAME;
 
     @Property(boolValue = true, label = "Enabled")
     private static final String ENABLED = "enabled";
@@ -77,16 +85,16 @@ public class SimpleDistributionAgentFactory {
     public static final String SERVICE_NAME = "serviceName";
 
     @Property(name = "packageExporter.target")
-    @Reference(name = "packageExporter", target = DEFAULT_TARGET)
+    @Reference(name = "packageExporter")
     private DistributionPackageExporter packageExporter;
 
 
     @Property(name = "packageImporter.target")
-    @Reference(name = "packageImporter", target = DEFAULT_TARGET)
+    @Reference(name = "packageImporter")
     private DistributionPackageImporter packageImporter;
 
     @Property(name = "requestAuthorizationStrategy.target")
-    @Reference(name = "requestAuthorizationStrategy", target = DEFAULT_TARGET)
+    @Reference(name = "requestAuthorizationStrategy")
     private DistributionRequestAuthorizationStrategy requestAuthorizationStrategy;
 
     @Reference

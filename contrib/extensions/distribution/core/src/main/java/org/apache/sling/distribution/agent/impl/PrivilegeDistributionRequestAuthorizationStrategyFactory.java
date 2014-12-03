@@ -18,17 +18,19 @@
  */
 package org.apache.sling.distribution.agent.impl;
 
-import org.apache.felix.scr.annotations.*;
+import javax.annotation.Nonnull;
+import java.util.Map;
+
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.ConfigurationPolicy;
+import org.apache.felix.scr.annotations.Property;
+import org.apache.felix.scr.annotations.Service;
 import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.commons.osgi.PropertiesUtil;
-import org.apache.sling.distribution.agent.DistributionRequestAuthorizationException;
-import org.apache.sling.distribution.agent.DistributionRequestAuthorizationStrategy;
 import org.apache.sling.distribution.communication.DistributionRequest;
 import org.apache.sling.distribution.component.impl.DistributionComponentUtils;
 import org.osgi.framework.BundleContext;
-
-import javax.annotation.Nonnull;
-import java.util.Map;
 
 @Component(metatype = true,
         label = "Sling Distribution - Privilege Request Authorization Strategy",
@@ -45,7 +47,7 @@ public class PrivilegeDistributionRequestAuthorizationStrategyFactory implements
      * name of this component.
      */
     @Property
-    public static final String NAME = DistributionComponentUtils.NAME;
+    public static final String NAME = DistributionComponentUtils.PN_NAME;
 
     /**
      * privilege request authorization strategy jcr privilege property

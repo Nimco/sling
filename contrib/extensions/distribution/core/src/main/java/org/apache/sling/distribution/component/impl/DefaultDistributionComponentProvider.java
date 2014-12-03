@@ -29,7 +29,7 @@ import org.apache.felix.scr.annotations.Reference;
 import org.apache.felix.scr.annotations.ReferenceCardinality;
 import org.apache.felix.scr.annotations.ReferencePolicy;
 import org.apache.felix.scr.annotations.References;
-import org.apache.felix.scr.annotations.Service;
+import org.apache.sling.commons.osgi.PropertiesUtil;
 import org.apache.sling.distribution.agent.DistributionAgent;
 import org.apache.sling.distribution.packaging.DistributionPackageExporter;
 import org.apache.sling.distribution.packaging.DistributionPackageImporter;
@@ -53,8 +53,7 @@ import org.slf4j.LoggerFactory;
 })
 public class DefaultDistributionComponentProvider {
 
-    public static final String COMPONENT_TYPE = "type";
-    public static final String NAME = "name";
+    public static final String NAME = DistributionComponentUtils.PN_NAME;
 
     private final Logger log = LoggerFactory.getLogger(getClass());
 
@@ -85,7 +84,7 @@ public class DefaultDistributionComponentProvider {
 
     private void bindDistributionQueueProvider(DistributionQueueProvider distributionQueueProvider, Map<String, Object> config) {
 
-        String name = (String) config.get("name");
+        String name = PropertiesUtil.toString(config.get(NAME), null);
         if (name != null) {
             distributionQueueProviderMap.put(name, distributionQueueProvider);
         }
@@ -93,7 +92,7 @@ public class DefaultDistributionComponentProvider {
 
     private void unbindDistributionQueueProvider(DistributionQueueProvider distributionQueueProvider, Map<String, Object> config) {
 
-        String name = (String) config.get("name");
+        String name = PropertiesUtil.toString(config.get(NAME), null);
         if (name != null) {
             distributionQueueProviderMap.remove(name);
         }
@@ -101,7 +100,7 @@ public class DefaultDistributionComponentProvider {
 
     private void bindDistributionQueueDistributionStrategy(DistributionQueueDispatchingStrategy distributionQueueDispatchingStrategy, Map<String, Object> config) {
 
-        String name = (String) config.get("name");
+        String name = PropertiesUtil.toString(config.get(NAME), null);
         if (name != null) {
             distributionQueueDistributionStrategyMap.put(name, distributionQueueDispatchingStrategy);
         }
@@ -109,7 +108,7 @@ public class DefaultDistributionComponentProvider {
 
     private void unbindDistributionQueueDistributionStrategy(DistributionQueueDispatchingStrategy distributionQueueDispatchingStrategy, Map<String, Object> config) {
 
-        String name = (String) config.get("name");
+        String name = PropertiesUtil.toString(config.get(NAME), null);
         if (name != null) {
             distributionQueueDistributionStrategyMap.remove(name);
         }
@@ -117,7 +116,7 @@ public class DefaultDistributionComponentProvider {
 
     private void bindTransportAuthenticationProvider(TransportAuthenticationProvider transportAuthenticationProvider, Map<String, Object> config) {
 
-        String name = (String) config.get("name");
+        String name = PropertiesUtil.toString(config.get(NAME), null);
         if (name != null) {
             transportAuthenticationProviderMap.put(name, transportAuthenticationProvider);
 
@@ -127,7 +126,7 @@ public class DefaultDistributionComponentProvider {
 
     private void unbindTransportAuthenticationProvider(TransportAuthenticationProvider transportAuthenticationProvider, Map<String, Object> config) {
 
-        String name = (String) config.get("name");
+        String name = PropertiesUtil.toString(config.get(NAME), null);
         if (name != null) {
             transportAuthenticationProviderMap.remove(name);
 
@@ -136,7 +135,7 @@ public class DefaultDistributionComponentProvider {
 
     private void bindDistributionPackageImporter(DistributionPackageImporter distributionPackageImporter, Map<String, Object> config) {
 
-        String name = (String) config.get("name");
+        String name = PropertiesUtil.toString(config.get(NAME), null);
         if (name != null) {
             distributionPackageImporterMap.put(name, distributionPackageImporter);
 
@@ -145,7 +144,7 @@ public class DefaultDistributionComponentProvider {
 
     private void unbindDistributionPackageImporter(DistributionPackageImporter distributionPackageImporter, Map<String, Object> config) {
 
-        String name = (String) config.get("name");
+        String name = PropertiesUtil.toString(config.get(NAME), null);
         if (name != null) {
             distributionPackageImporterMap.remove(name);
         }
@@ -153,7 +152,7 @@ public class DefaultDistributionComponentProvider {
 
     private void bindDistributionPackageExporter(DistributionPackageExporter distributionPackageExporter, Map<String, Object> config) {
 
-        String name = (String) config.get("name");
+        String name = PropertiesUtil.toString(config.get(NAME), null);
         if (name != null) {
             distributionPackageExporterMap.put(name, distributionPackageExporter);
         }
@@ -161,7 +160,7 @@ public class DefaultDistributionComponentProvider {
 
     private void unbindDistributionPackageExporter(DistributionPackageExporter distributionPackageExporter, Map<String, Object> config) {
 
-        String name = (String) config.get("name");
+        String name = PropertiesUtil.toString(config.get(NAME), null);
         if (name != null) {
             distributionPackageExporterMap.remove(name);
         }
@@ -170,7 +169,7 @@ public class DefaultDistributionComponentProvider {
 
     private void bindDistributionAgent(DistributionAgent distributionAgent, Map<String, Object> config) {
 
-        String name = (String) config.get("name");
+        String name = PropertiesUtil.toString(config.get(NAME), null);
         if (name != null) {
             distributionAgentMap.put(name, distributionAgent);
         }
@@ -178,12 +177,10 @@ public class DefaultDistributionComponentProvider {
 
     private void unbindDistributionAgent(DistributionAgent distributionAgent, Map<String, Object> config) {
 
-        String name = (String) config.get("name");
+        String name = PropertiesUtil.toString(config.get(NAME), null);
         if (name != null) {
             distributionAgentMap.remove(name);
         }
 
     }
-
-
 }
