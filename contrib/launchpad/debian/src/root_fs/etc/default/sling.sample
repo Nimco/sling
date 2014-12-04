@@ -53,6 +53,7 @@ SLING_HOME=/opt/sling
 SLING_LOG_DIR=/var/log/sling
 LOG_FILE=$SLING_LOG_DIR/${NAME}-start.log
 SLING_USER=sling
+SLING_GROUP_sling
 SLING_DATA=/var/lib/sling
 SLING_DEFAULTS=/etc/default/sling
 set +a

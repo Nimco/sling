@@ -59,7 +59,7 @@ status()
 # Stop current sling instance
 #
 function stop () {
-	start-stop-daemon --stop --pidfile $PID --chdir $SLING_HOME --startas "./$NAME" --signal TERM
+	start-stop-daemon --stop --chuid $SLING_USER:$SLING_GROUP --pidfile $PID --chdir $SLING_HOME --startas "./$NAME" --signal TERM
 }
 
 #
