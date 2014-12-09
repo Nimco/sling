@@ -16,20 +16,22 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.sling.models.factory;
+package org.apache.sling.testing.mock.jcr;
+
+import aQute.bnd.annotation.ConsumerType;
 
 /**
- * Exception which is triggered when the Model could not be instantiated due to
- * model class is not having a model annotation, some reflection error, invalid constructors or 
- * some exception within the post construct method was triggered.
- * 
- * @see ModelFactory
+ * Allows to set mocked query results for a mocked {@link javax.jcr.query.QueryManager}.
  */
-public final class InvalidModelException extends RuntimeException {
+@ConsumerType
+public interface MockQueryResultHandler {
 
-    private static final long serialVersionUID = 4323592065808565135L;
-
-    public InvalidModelException(String message) {
-        super(message);
-    }
+    /**
+     * Checks if this handler accepts the given query, and returns the result if this is the case.
+     * @param query Query that is executed
+     * @return Query result if the query can be executed by this handler.
+     *   If not, null is returned and other handlers are asked to provide a result.
+     */
+    MockQueryResult executeQuery(MockQuery query);
+    
 }
