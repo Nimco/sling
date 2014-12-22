@@ -16,27 +16,8 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.sling.distribution.communication.impl;
-
 /**
- * HTTP Parameters for distribution
+ * OSGI testing tools.
  */
-public enum DistributionParameter {
-
-    QUEUE("queue"),
-    TYPE("type"),
-    ACTION("action"),
-    PATH("path"),
-    DEEP("deep");
-
-    private final String name;
-
-    DistributionParameter(String name) {
-        this.name = name;
-    }
-
-    @Override
-    public String toString() {
-        return name;
-    }
-}
+@aQute.bnd.annotation.Version("1.1")
+package org.apache.sling.testing.tools.osgi;

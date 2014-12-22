@@ -34,10 +34,10 @@ import org.apache.sling.api.resource.ResourceResolverFactory;
 import org.apache.sling.distribution.agent.DistributionAgent;
 import org.apache.sling.distribution.agent.DistributionAgentException;
 
-import org.apache.sling.distribution.communication.DistributionRequest;
-import org.apache.sling.distribution.communication.DistributionRequestState;
-import org.apache.sling.distribution.communication.DistributionResponse;
-import org.apache.sling.distribution.communication.impl.SimpleDistributionResponse;
+import org.apache.sling.distribution.DistributionRequest;
+import org.apache.sling.distribution.DistributionRequestState;
+import org.apache.sling.distribution.DistributionResponse;
+import org.apache.sling.distribution.impl.SimpleDistributionResponse;
 import org.apache.sling.distribution.event.DistributionEventType;
 import org.apache.sling.distribution.event.impl.DistributionEventFactory;
 import org.apache.sling.distribution.packaging.DistributionPackage;
@@ -257,10 +257,8 @@ public class SimpleDistributionAgent implements DistributionAgent {
     public void enable() {
         log.info("enabling agent");
 
-
         // register triggers if any
         agentBasedRequestHandler = new AgentBasedRequestHandler(this);
-
 
         for (DistributionTrigger trigger : triggers) {
             try {
@@ -269,7 +267,6 @@ public class SimpleDistributionAgent implements DistributionAgent {
                 log.error("could not register handler {} from trigger {}", agentBasedRequestHandler, trigger);
             }
         }
-
 
         if (!isPassive()) {
             try {
@@ -378,7 +375,6 @@ public class SimpleDistributionAgent implements DistributionAgent {
         authenticationInfo.put(ResourceResolverFactory.SUBSERVICE, subServiceName);
         resourceResolver = resourceResolverFactory.getServiceResourceResolver(authenticationInfo);
 
-
         return resourceResolver;
     }
 
@@ -414,7 +410,7 @@ public class SimpleDistributionAgent implements DistributionAgent {
         public void handle(@Nonnull DistributionRequest request) {
 
             if (!active) {
-                log.warn("handler is active when agent is disabled");
+                log.debug("skipping agent handler as agent {} is disabled", name);
                 return;
             }
 
@@ -473,7 +469,7 @@ public class SimpleDistributionAgent implements DistributionAgent {
         }
     }
 
-    /* Provide the aggregated state of two {@link org.apache.sling.distribution.communication.DistributionRequestState}s */
+    /* Provide the aggregated state of two {@link org.apache.sling.distribution.DistributionRequestState}s */
     private DistributionRequestState aggregatedState(DistributionRequestState first, DistributionRequestState second) {
         DistributionRequestState aggregatedState;
         switch (second) {

@@ -59,18 +59,13 @@ public class LocalDistributionPackageImporterFactory implements DistributionPack
 
     @Property(name = "packageBuilder.target")
     @Reference(name = "packageBuilder")
-    DistributionPackageBuilder packageBuilder;
-
-    @Reference
-    DistributionEventFactory distributionEventFactory;
-
+    private DistributionPackageBuilder packageBuilder;
 
     private DistributionPackageImporter importer;
 
     @Activate
-    public void activate(Map<String, Object> config) {
-
-        importer = new LocalDistributionPackageImporter(packageBuilder, distributionEventFactory);
+    public void activate() {
+        importer = new LocalDistributionPackageImporter(packageBuilder);
     }
 
 
