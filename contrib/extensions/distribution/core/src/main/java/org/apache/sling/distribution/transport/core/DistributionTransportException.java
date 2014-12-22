@@ -16,27 +16,20 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.sling.distribution.communication;
+package org.apache.sling.distribution.transport.core;
 
 /**
- * HTTP Parameters for distribution
+ * Represents an error happened while a {@link DistributionTransportHandler} is delivering a distribution item to
+ * and endpoint.
  */
-public enum DistributionParameter {
+@SuppressWarnings("serial")
+public class DistributionTransportException extends Exception {
 
-    QUEUE("queue"),
-    TYPE("type"),
-    ACTION("action"),
-    PATH("path"),
-    DEEP("deep");
-
-    private final String name;
-
-    DistributionParameter(String name) {
-        this.name = name;
+    public DistributionTransportException(Exception e) {
+        super(e);
     }
 
-    @Override
-    public String toString() {
-        return name;
+    public DistributionTransportException(String string) {
+        super(string);
     }
 }

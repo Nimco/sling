@@ -18,37 +18,44 @@
  */
 package org.apache.sling.distribution.communication;
 
+import aQute.bnd.annotation.ProviderType;
+
+import javax.annotation.CheckForNull;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
 /**
  * A {@link org.apache.sling.distribution.communication.DistributionResponse} represents the outcome of a
- * {@link org.apache.sling.distribution.communication.DistributionRequest} as handled by a certain {@link org.apache.sling.distribution.agent.DistributionAgent}.
+ * {@link org.apache.sling.distribution.communication.DistributionRequest} as handled by a certain distribution agent.
  * Such a response will include the {@link org.apache.sling.distribution.communication.DistributionRequestState state} of
  * the {@link org.apache.sling.distribution.communication.DistributionRequest request} and optionally a message for more
  * verbose information about the outcome of the request.
  */
-public class DistributionResponse {
+@ProviderType
+public interface DistributionResponse {
 
-    private final DistributionRequestState state;
-    private final String message;
+    /**
+     * returns the status of the request, whether it is successful or not.
+     * A successful request it is not necessarily distributed, it is just successfully received by the agent.
+     * To check the exact state of the request one can retrieve it with <code>getState</code>
+     *
+     * @return <code>true</code> if request has been accepted by the agent.
+     */
+    boolean isSuccessful();
 
-    public DistributionResponse(@Nonnull DistributionRequestState state, @Nullable String message) {
-        this.state = state;
-        this.message = message;
-    }
+    /**
+     * returns the state of the associated {@link DistributionRequest}
+     *
+     * @return the state of the associated request
+     */
+    @Nonnull
+    DistributionRequestState getState();
 
-    public DistributionRequestState getState() {
-        return state;
-    }
-
-    public String getMessage() {
-        return message != null ? message : "";
-    }
-
-    @Override
-    public String toString() {
-        return "{\"state\":" + state + ", \"message\":\"" + message + "\"}";
-    }
-
+    /**
+     * returns a verbose message of the response
+     * @return a message associated with this response holding information about
+     * e.g. why distribution execution failed, etc.
+     */
+    @CheckForNull
+    String getMessage();
 }

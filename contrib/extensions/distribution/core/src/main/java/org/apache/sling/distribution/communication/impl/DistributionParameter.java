@@ -16,9 +16,27 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+package org.apache.sling.distribution.communication.impl;
 
-@Version("0.1.0")
-package org.apache.sling.distribution.trigger;
+/**
+ * HTTP Parameters for distribution
+ */
+public enum DistributionParameter {
 
-import aQute.bnd.annotation.Version;
+    QUEUE("queue"),
+    TYPE("type"),
+    ACTION("action"),
+    PATH("path"),
+    DEEP("deep");
 
+    private final String name;
+
+    DistributionParameter(String name) {
+        this.name = name;
+    }
+
+    @Override
+    public String toString() {
+        return name;
+    }
+}
