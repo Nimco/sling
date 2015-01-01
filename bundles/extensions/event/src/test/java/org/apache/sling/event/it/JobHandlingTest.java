@@ -151,11 +151,6 @@ public class JobHandlingTest extends AbstractJobHandlingTest {
 
                     @Override
                     public JobResult process(final Job job) {
-                        try {
-                            Thread.sleep(10);
-                        } catch (InterruptedException ie) {
-                            // ignore
-                        }
                         return JobResult.OK;
                     }
 
@@ -164,7 +159,7 @@ public class JobHandlingTest extends AbstractJobHandlingTest {
         final ServiceRegistration reg2 = this.registerEventHandler(NotificationConstants.TOPIC_JOB_FINISHED,
                 new EventHandler() {
                     @Override
-                    public void handleEvent(Event event) {
+                    public void handleEvent(final Event event) {
                         count.incrementAndGet();
                     }
                  });
@@ -176,11 +171,7 @@ public class JobHandlingTest extends AbstractJobHandlingTest {
                 this.getJobManager().addJob(TOPIC, null);
             }
             while ( count.get() < COUNT ) {
-                try {
-                    Thread.sleep(500);
-                } catch (InterruptedException ie) {
-                    // ignore
-                }
+                this.sleep(50);
             }
             assertEquals("Finished count", COUNT, count.get());
             assertEquals("Finished count", COUNT, this.getJobManager().getStatistics().getNumberOfFinishedJobs());
@@ -188,6 +179,8 @@ public class JobHandlingTest extends AbstractJobHandlingTest {
             reg1.unregister();
             reg2.unregister();
         }
+        // we put an extra sleep to see whether this fixes the test problems on Java 8
+        this.sleep(5000);
     }
 
     /**
@@ -209,24 +202,31 @@ public class JobHandlingTest extends AbstractJobHandlingTest {
                     }
                 });
         try {
+            final Map<String, Object> jobProperties = Collections.singletonMap("id", (Object)"cancelJobId");
+            @SuppressWarnings("unchecked")
+            final Map<String, Object>[] jobPropertiesAsArray = new Map[1];
+            jobPropertiesAsArray[0] = jobProperties;
+
+            // create job
             final JobManager jobManager = this.getJobManager();
-            jobManager.addJob(TOPIC, Collections.singletonMap("id", (Object)"myid2"));
+            jobManager.addJob(TOPIC, jobProperties);
             cb.block();
 
-            assertEquals(1, jobManager.findJobs(JobManager.QueryType.ALL, TOPIC, -1, (Map<String, Object>[])null).size());
+            assertEquals(1, jobManager.findJobs(JobManager.QueryType.ALL, TOPIC, -1, jobPropertiesAsArray).size());
             // job is currently waiting, therefore cancel fails
-            final Job e1 = jobManager.getJob(TOPIC, Collections.singletonMap("id", (Object)"myid2"));
+            final Job e1 = jobManager.getJob(TOPIC, jobProperties);
             assertNotNull(e1);
             cb2.block(); // and continue job
 
             sleep(200);
 
             // the job is now in the queue again
-            final Job e2 = jobManager.getJob(TOPIC, Collections.singletonMap("id", (Object)"myid2"));
+            final Job e2 = jobManager.getJob(TOPIC, jobProperties);
             assertNotNull(e2);
             assertTrue(jobManager.removeJobById(e2.getId()));
-            assertEquals(0, jobManager.findJobs(JobManager.QueryType.ALL, TOPIC, -1, (Map<String, Object>[])null).size());
-            final Collection<Job> col = jobManager.findJobs(JobManager.QueryType.HISTORY, TOPIC, -1, (Map<String, Object>[])null);
+            assertEquals(0, jobManager.findJobs(JobManager.QueryType.ALL, TOPIC, -1, jobPropertiesAsArray).size());
+            final Collection<Job> col = jobManager.findJobs(JobManager.QueryType.HISTORY, TOPIC, -1,
+                    jobPropertiesAsArray);
             try {
                 assertEquals(1, col.size());
             } finally {
@@ -468,11 +468,7 @@ public class JobHandlingTest extends AbstractJobHandlingTest {
                 jobManager.addJob(jobTopic, null);
             }
             while ( jobManager.getStatistics().getNumberOfFinishedJobs() < COUNT / 2) {
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException ie) {
-                    // ignore
-                }
+                this.sleep(50);
             }
 
             assertEquals("Finished count", COUNT / 2, count.get());

@@ -47,10 +47,10 @@ public class ConfigTaskCreator
     implements InstallTaskFactory, ConfigurationListener, ResourceTransformer {
 
     /** Configuration admin. */
-    private ConfigurationAdmin configAdmin;
+    private final ConfigurationAdmin configAdmin;
 
     /** Resource change listener. */
-    private ResourceChangeListener changeListener;
+    private final ResourceChangeListener changeListener;
 
     public ConfigTaskCreator(final ResourceChangeListener listener, final ConfigurationAdmin configAdmin) {
         this.changeListener = listener;
@@ -73,8 +73,9 @@ public class ConfigTaskCreator
             // if this is an uninstall, check if we have to install an older version
             // in this case we should do an update instead of uninstall/install (!)
             final TaskResource second = group.getNextActiveResource();
-            if ( second != null &&
-                ( second.getState() == ResourceState.IGNORED || second.getState() == ResourceState.INSTALLED || second.getState() == ResourceState.INSTALL ) ) {
+            if ( second != null
+                && ( second.getState() == ResourceState.IGNORED || second.getState() == ResourceState.INSTALLED || second.getState() == ResourceState.INSTALL )
+                && ( second.getDictionary() == null || second.getDictionary().get(InstallableResource.RESOURCE_IS_TEMPLATE) == null)) {
                 result = new ChangeStateTask(group, ResourceState.UNINSTALLED);
             } else {
                 result = new ConfigRemoveTask(group, this.configAdmin);
@@ -107,20 +108,11 @@ public class ConfigTaskCreator
                 try {
                     final Configuration config = ConfigUtil.getConfiguration(configAdmin,
                             event.getFactoryPid(),
-                            event.getPid(),
-                            false);
+                            event.getPid());
                     if ( config != null ) {
-                        final Dictionary<String, Object> dict = ConfigUtil.cleanConfiguration(config.getProperties());
-                        boolean persist = true;
-                        final Object persistProp = dict.get(ConfigurationConstants.PROPERTY_PERSISTENCE);
-                        if ( persistProp != null ) {
-                            if (persistProp instanceof Boolean) {
-                                persist = ((Boolean) persistProp).booleanValue();
-                            } else {
-                                persist = Boolean.valueOf(String.valueOf(persistProp));
-                            }
-                        }
+                        final boolean persist = ConfigUtil.toBoolean(config.getProperties().get(ConfigurationConstants.PROPERTY_PERSISTENCE), true);
                         if ( persist ) {
+                            final Dictionary<String, Object> dict = ConfigUtil.cleanConfiguration(config.getProperties());
                             final Map<String, Object> attrs = new HashMap<String, Object>();
                             attrs.put(Constants.SERVICE_PID, event.getPid());
                             if ( event.getFactoryPid() == null ) {
@@ -186,7 +178,7 @@ public class ConfigTaskCreator
             final String cString = pid.substring(n + 1);
             boolean useExtendedPid = false;
             try {
-                if ( ConfigUtil.getConfiguration(this.configAdmin, fString, fString + '.' + cString, false) != null ) {
+                if ( ConfigUtil.getConfiguration(this.configAdmin, fString, fString + '.' + cString) != null ) {
                     useExtendedPid = true;
                 }
             } catch ( final Exception ignore) {
