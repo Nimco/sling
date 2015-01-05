@@ -28,7 +28,7 @@ under the License.
         <version>22</version>
         <relativePath>../../../parent/pom.xml</relativePath>
     </parent>
-    <artifactId>sling-lauchpad</artifactId>
+    <artifactId>sling-launchpad</artifactId>
     <packaging>jar</packaging>
     <version>8-SNAPSHOT</version>
     <name>Apache Sling Launchpad Debian Package Builder</name>
