@@ -80,7 +80,16 @@ public class DistributionUtils {
         ).assertStatus(status).getContent();
     }
 
+    public static void setArrayProperties(SlingInstance slingInstance, String resource, String property, String... values) throws IOException {
+        List<String> parameters = new ArrayList<String>();
+        for (String value : values) {
+            parameters.add(property);
+            parameters.add(value);
+        }
 
+        assertPostResourceWithParameters(slingInstance, 200, resource, parameters.toArray(new String[0]));
+
+    }
 
     public static void assertResponseContains(SlingInstance slingInstance,
                                               String resource, String... parameters) throws IOException {
@@ -188,11 +197,11 @@ public class DistributionUtils {
     }
 
     public static String authorAgentConfigUrl(String agentName) {
-        return DISTRIBUTION_ROOT_PATH + "/settings.author/agents/" + agentName;
+        return DISTRIBUTION_ROOT_PATH + "/settings/agents/" + agentName;
     }
 
     public static String publishAgentConfigUrl(String agentName) {
-        return DISTRIBUTION_ROOT_PATH + "/settings.publish/agents/" + agentName;
+        return DISTRIBUTION_ROOT_PATH + "/settings/agents/" + agentName;
     }
 
 

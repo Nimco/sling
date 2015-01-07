@@ -198,6 +198,15 @@ public class EntityResourceList implements Serializable, TaskResourceGroup {
     }
 
     /**
+     * Force the state to be set
+     */
+    public void setForceFinishState(final ResourceState state) {
+        // We first set the state of the resource to install to make setFinishState work in all cases
+        ((RegisteredResourceImpl)this.getFirstResource()).setState(ResourceState.INSTALL);
+        this.setFinishState(state);
+    }
+
+    /**
      * @see org.apache.sling.installer.api.tasks.TaskResourceGroup#setFinishState(org.apache.sling.installer.api.tasks.ResourceState)
      */
     public void setFinishState(ResourceState state) {
@@ -211,7 +220,7 @@ public class EntityResourceList implements Serializable, TaskResourceGroup {
                 if ( second.getDictionary() != null
                      && second.getDictionary().get(InstallableResource.RESOURCE_IS_TEMPLATE) != null ) {
                     // second resource is a template! Do not install
-                    ((RegisteredResourceImpl)second).setState(ResourceState.INSTALLED);
+                    ((RegisteredResourceImpl)second).setState(ResourceState.IGNORED);
                 } else if ( state == ResourceState.UNINSTALLED ) {
                     // first resource got uninstalled, go back to second
                     if (second.getState() == ResourceState.IGNORED || second.getState() == ResourceState.INSTALLED) {

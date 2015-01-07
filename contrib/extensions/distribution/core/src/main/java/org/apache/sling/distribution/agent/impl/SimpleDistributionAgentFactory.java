@@ -18,11 +18,7 @@
  */
 package org.apache.sling.distribution.agent.impl;
 
-import java.util.Dictionary;
-import java.util.Hashtable;
-import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.apache.felix.scr.annotations.Activate;
 import org.apache.felix.scr.annotations.Component;
@@ -34,7 +30,6 @@ import org.apache.felix.scr.annotations.ReferenceCardinality;
 import org.apache.felix.scr.annotations.ReferencePolicy;
 import org.apache.sling.api.resource.ResourceResolverFactory;
 import org.apache.sling.commons.osgi.PropertiesUtil;
-import org.apache.sling.distribution.agent.DistributionAgent;
 import org.apache.sling.distribution.component.impl.DistributionComponentUtils;
 import org.apache.sling.distribution.event.impl.DistributionEventFactory;
 import org.apache.sling.distribution.packaging.DistributionPackageExporter;
@@ -43,14 +38,10 @@ import org.apache.sling.distribution.queue.impl.DistributionQueueDispatchingStra
 import org.apache.sling.distribution.queue.DistributionQueueProvider;
 import org.apache.sling.distribution.queue.impl.SingleQueueDispatchingStrategy;
 import org.apache.sling.distribution.queue.impl.jobhandling.JobHandlingDistributionQueueProvider;
-import org.apache.sling.distribution.resources.DistributionConstants;
-import org.apache.sling.distribution.resources.impl.OsgiUtils;
 import org.apache.sling.distribution.trigger.DistributionTrigger;
 import org.apache.sling.event.jobs.JobManager;
 import org.apache.sling.settings.SlingSettingsService;
 import org.osgi.framework.BundleContext;
-import org.osgi.framework.ServiceReference;
-import org.osgi.framework.ServiceRegistration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -67,7 +58,7 @@ import org.slf4j.LoggerFactory;
 @Reference(name = "triggers", referenceInterface = DistributionTrigger.class,
         policy = ReferencePolicy.DYNAMIC, cardinality = ReferenceCardinality.OPTIONAL_MULTIPLE,
         bind = "bindDistributionTrigger", unbind = "unbindDistributionTrigger")
-public class SimpleDistributionAgentFactory {
+public class SimpleDistributionAgentFactory extends AbstractDistributionAgentFactory {
     private final Logger log = LoggerFactory.getLogger(getClass());
 
     @Property(label = "Name")
@@ -97,6 +88,10 @@ public class SimpleDistributionAgentFactory {
     @Reference(name = "requestAuthorizationStrategy")
     private DistributionRequestAuthorizationStrategy requestAuthorizationStrategy;
 
+    @Property(value = DEFAULT_TRIGGER_TARGET)
+    public static final String TRIGGERS_TARGET = "triggers.target";
+
+
     @Reference
     private DistributionEventFactory distributionEventFactory;
 
@@ -109,99 +104,38 @@ public class SimpleDistributionAgentFactory {
     @Reference
     private ResourceResolverFactory resourceResolverFactory;
 
-    private ServiceRegistration componentReg;
-    private BundleContext savedContext;
-    private Map<String, Object> savedConfig;
-    private String agentName;
-    List<DistributionTrigger> triggers = new CopyOnWriteArrayList<DistributionTrigger>();
-
     private SimpleDistributionAgent agent;
 
     @Activate
     protected void activate(BundleContext context, Map<String, Object> config) {
-        log.info("activating with config {}", OsgiUtils.osgiPropertyMapToString(config));
-
-
-        savedContext = context;
-        savedConfig = config;
-
-        // inject configuration
-        Dictionary<String, Object> props = new Hashtable<String, Object>();
-
-        boolean enabled = PropertiesUtil.toBoolean(config.get(ENABLED), true);
-
-        if (enabled) {
-            props.put(ENABLED, true);
-
-            agentName = PropertiesUtil.toString(config.get(NAME), null);
-            props.put(NAME, agentName);
-            props.put(DistributionConstants.PN_IS_RESOURCE, config.get(DistributionConstants.PN_IS_RESOURCE));
-
-            if (componentReg == null) {
-
-                String serviceName = PropertiesUtil.toString(config.get(SERVICE_NAME), null);
-
-                boolean isPassive = PropertiesUtil.toBoolean(config.get(IS_PASSIVE), false);
-
-                try {
-
-                    DistributionQueueProvider queueProvider =  new JobHandlingDistributionQueueProvider(agentName, jobManager, savedContext);
-                    DistributionQueueDispatchingStrategy dispatchingStrategy = new SingleQueueDispatchingStrategy();
-                    agent = new SimpleDistributionAgent(agentName, isPassive, serviceName,
-                            packageImporter, packageExporter, requestAuthorizationStrategy,
-                            queueProvider, dispatchingStrategy, distributionEventFactory, resourceResolverFactory, triggers);
-                }
-                catch (IllegalArgumentException e) {
-                    log.warn("cannot create agent", e);
-                }
-
-
-                if (agent != null) {
-
-                    // register agent service
-                    componentReg = context.registerService(DistributionAgent.class.getName(), agent, props);
-                    agent.enable();
-                }
-
-                log.info("activated agent {}", agentName);
-
-            }
-        }
+        super.activate(context, config);
     }
 
-    private void bindDistributionTrigger(DistributionTrigger distributionTrigger, Map<String, Object> config) {
-        triggers.add(distributionTrigger);
-        if (agent != null) {
-            agent.enableTrigger(distributionTrigger);
-        }
+    protected void bindDistributionTrigger(DistributionTrigger distributionTrigger, Map<String, Object> config) {
+       super.bindDistributionTrigger(distributionTrigger, config);
 
     }
 
-    private void unbindDistributionTrigger(DistributionTrigger distributionTrigger, Map<String, Object> config) {
-        triggers.remove(distributionTrigger);
-
-        if (agent != null) {
-            agent.disableTrigger(distributionTrigger);
-        }
+    protected void unbindDistributionTrigger(DistributionTrigger distributionTrigger, Map<String, Object> config) {
+        super.unbindDistributionTrigger(distributionTrigger, config);
     }
 
     @Deactivate
     protected void deactivate(BundleContext context) {
-        if (componentReg != null) {
-            ServiceReference reference = componentReg.getReference();
-            Object service = context.getService(reference);
-            if (service instanceof SimpleDistributionAgent) {
-                ((SimpleDistributionAgent) service).disable();
+        super.deactivate(context);
+    }
 
-            }
+    @Override
+    protected SimpleDistributionAgent createAgent(String agentName, BundleContext context, Map<String, Object> config) {
+        String serviceName = PropertiesUtil.toString(config.get(SERVICE_NAME), null);
 
-            componentReg.unregister();
-            componentReg = null;
-            agent = null;
-        }
+        boolean isPassive = PropertiesUtil.toBoolean(config.get(IS_PASSIVE), false);
 
-        log.info("deactivated agent {}", agentName);
-
+        DistributionQueueProvider queueProvider =  new JobHandlingDistributionQueueProvider(agentName, jobManager, context);
+        DistributionQueueDispatchingStrategy dispatchingStrategy = new SingleQueueDispatchingStrategy();
+        return new SimpleDistributionAgent(agentName, isPassive, serviceName,
+                packageImporter, packageExporter, requestAuthorizationStrategy,
+                queueProvider, dispatchingStrategy, distributionEventFactory, resourceResolverFactory, triggers);
 
     }
 }
