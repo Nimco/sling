@@ -1035,13 +1035,17 @@ on 64bit platforms: MAVEN_OPTS="-Xmx512M -XX:MaxPermSize=512M", see SLING-1782
         </dependency>
     </dependencies>
 
-    <distributionManagement>
-        <site>
-            <id>apache.sling.site</id>
-            <url>
-                scp://people.apache.org/www/sling.apache.org/generated
-            </url>
-        </site>
+      <distributionManagement>
+        <repository>
+          <id>nexus-releases</id>
+          <name>Internal Releases</name>
+          <url>http://nexus.nim.com:8081/nexus/content/repositories/releases/</url>
+        </repository>
+        <snapshotRepository>
+          <id>nexus-snapshots</id>
+          <name>Internal Releases</name>
+          <url>http://nexus.nim.com:8081/nexus/content/repositories/snapshots/</url>
+        </snapshotRepository>
     </distributionManagement>
 
     <pluginRepositories>
