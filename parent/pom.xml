@@ -1047,7 +1047,7 @@ on 64bit platforms: MAVEN_OPTS="-Xmx512M -XX:MaxPermSize=512M", see SLING-1782
           <url>http://nexus.nim.com:8081/nexus/content/repositories/snapshots/</url>
         </snapshotRepository>
     </distributionManagement>
-
+<!--
     <pluginRepositories>
         <pluginRepository>
             <id>apache.snapshots</id>
@@ -1058,5 +1058,5 @@ on 64bit platforms: MAVEN_OPTS="-Xmx512M -XX:MaxPermSize=512M", see SLING-1782
             </releases>
         </pluginRepository>
     </pluginRepositories>
-
+-->
 </project>
