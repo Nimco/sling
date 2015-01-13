@@ -27,7 +27,7 @@
     </parent>
 
     <artifactId>org.apache.sling.jcr.resourcesecurity</artifactId>
-    <version>1.0.1-SNAPSHOT</version>
+    <version>1.0.3-SNAPSHOT</version>
     <packaging>bundle</packaging>
 
     <name>Apache Sling JCR Resource Security</name>

@@ -38,6 +38,7 @@ import org.apache.sling.distribution.packaging.impl.exporter.RemoteDistributionP
 import org.apache.sling.distribution.packaging.impl.importer.RemoteDistributionPackageImporter;
 import org.apache.sling.distribution.queue.impl.DistributionQueueDispatchingStrategy;
 import org.apache.sling.distribution.queue.DistributionQueueProvider;
+import org.apache.sling.distribution.queue.impl.MultipleQueueDispatchingStrategy;
 import org.apache.sling.distribution.queue.impl.SingleQueueDispatchingStrategy;
 import org.apache.sling.distribution.queue.impl.jobhandling.JobHandlingDistributionQueueProvider;
 import org.apache.sling.distribution.serialization.DistributionPackageBuilder;
@@ -81,14 +82,19 @@ public class SyncDistributionAgentFactory extends AbstractDistributionAgentFacto
     /**
      * endpoints property
      */
-    @Property(cardinality = -1)
+    @Property(cardinality = 100)
     public static final String EXPORTER_ENDPOINTS = "packageExporter.endpoints";
 
     /**
      * endpoints property
      */
-    @Property(cardinality = -1)
+    @Property(cardinality = 100)
     public static final String IMPORTER_ENDPOINTS = "packageImporter.endpoints";
+
+
+
+    @Property(label = "Use multiple queues", boolValue = false)
+    public static final String USE_MULTIPLE_QUEUES = "useMultipleQueues";
 
     @Reference
     private Packaging packaging;
@@ -148,14 +154,29 @@ public class SyncDistributionAgentFactory extends AbstractDistributionAgentFacto
         String serviceName = PropertiesUtil.toString(config.get(SERVICE_NAME), null);
 
 
-        String[] exporterEndpoints = PropertiesUtil.toStringArray(config.get(EXPORTER_ENDPOINTS), new String[0]);
-        Map<String, String> importerEndpointsMap = SettingsUtils.toUriMap(config.get(IMPORTER_ENDPOINTS));
+        Object exporterEndpointsValue = config.get(EXPORTER_ENDPOINTS);
+        Object importerEndpointsValue = config.get(IMPORTER_ENDPOINTS);
 
+        String[] exporterEndpoints = PropertiesUtil.toStringArray(exporterEndpointsValue, new String[0]);
+        Map<String, String> importerEndpointsMap = SettingsUtils.toUriMap(importerEndpointsValue);
+
+        boolean useMultipleQueues = PropertiesUtil.toBoolean(config.get(USE_MULTIPLE_QUEUES), false);
+
+        DistributionQueueDispatchingStrategy dispatchingStrategy;
+        DistributionPackageImporter packageImporter;
+
+        if (useMultipleQueues) {
+            java.util.Set<String> var = importerEndpointsMap.keySet();
+            String[] queueNames = var.toArray(new String[var.size()]);
+            dispatchingStrategy = new MultipleQueueDispatchingStrategy(queueNames);
+            packageImporter = new RemoteDistributionPackageImporter(transportSecretProvider, importerEndpointsMap, TransportEndpointStrategyType.One);
+        } else {
+            dispatchingStrategy = new SingleQueueDispatchingStrategy();
+            packageImporter = new RemoteDistributionPackageImporter(transportSecretProvider, importerEndpointsMap, TransportEndpointStrategyType.All);
+        }
 
         DistributionPackageExporter packageExporter = new RemoteDistributionPackageExporter(packageBuilder, transportSecretProvider, exporterEndpoints, TransportEndpointStrategyType.All, 1);
-        DistributionPackageImporter packageImporter = new RemoteDistributionPackageImporter(transportSecretProvider, importerEndpointsMap, TransportEndpointStrategyType.All);
         DistributionQueueProvider queueProvider =  new JobHandlingDistributionQueueProvider(agentName, jobManager, context);
-        DistributionQueueDispatchingStrategy dispatchingStrategy = new SingleQueueDispatchingStrategy();
 
         return new SimpleDistributionAgent(agentName, false, serviceName,
                 packageImporter, packageExporter, requestAuthorizationStrategy,
