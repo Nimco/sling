@@ -42,7 +42,10 @@ JAVA_ARGS="-Xmx384M "
 # Uncomment for debugging:
 #JAVA_DEBUG_ARGS="-agentlib:jdwp=transport=dt_socket,address=30303,server=y,suspend=n"
 
-SLING_DEFAULT_ARGS="-c $SLING_DATA -p 8090 -a 0.0.0.0 $DEBUG_ARGS"
+SLING_PORT=8090
+SLING_LISTEN_ADDR=0.0.0.0
+
+SLING_DEFAULT_ARGS="-c $SLING_DATA -p $SLING_PORT -a $SLING_LISTEN_ADDR $DEBUG_ARGS"
 
 
 # Don't change anything below this line unless you want to break something
