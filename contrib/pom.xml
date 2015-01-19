@@ -108,7 +108,7 @@
           <module>extensions/distribution/api</module>
           <module>extensions/distribution/core</module>
           <module>extensions/distribution/sample</module>
-          <module>extensions/distribution/it</module>
+          <!--<module>extensions/distribution/it</module>-->
           <module>extensions/reqanalyzer</module>
           <module>extensions/resourcemerger</module>
           <module>extensions/rewriter</module>
@@ -116,7 +116,7 @@
           <module>extensions/sling-query</module>
           <module>extensions/superimposing</module>
           <module>extensions/tenant</module>
-          <module>extensions/validation</module>
+          <!--<module>extensions/validation</module>-->
           <module>extensions/xss</module>
           <module>jcr/compiler</module>
           <module>jcr/jackrabbit-client</module>
@@ -135,7 +135,7 @@
           <module>scripting/velocity</module>
           <module>scripting/xproc</module>
           <module>launchpad/karaf</module>
-          <module>launchpad/testing</module>
+          <!--<module>launchpad/testing</module>-->
           <module>launchpad/debian</module>
     </modules>
     <profiles>
