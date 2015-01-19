@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -15,28 +15,32 @@
  * KIND, either express or implied.  See the License for the
  * specific language governing permissions and limitations
  * under the License.
- ******************************************************************************/
+ */
 
-package org.apache.sling.scripting.sightly.use;
-
-import org.apache.sling.scripting.sightly.SightlyException;
+package org.apache.sling.distribution.queue;
 
 /**
- * Exception raised by the use resolving mechanism
+ * The state of a distribution queue.
  */
-public class SightlyUseException extends SightlyException {
-    public SightlyUseException() {
-    }
+public enum DistributionQueueState {
 
-    public SightlyUseException(String message) {
-        super(message);
-    }
+    /**
+     * The queue is not active
+     */
+    PAUSED,
 
-    public SightlyUseException(String message, Throwable cause) {
-        super(message, cause);
-    }
+    /**
+     * The queue is active but empty
+     */
+    IDLE,
 
-    public SightlyUseException(Throwable cause) {
-        super(cause);
-    }
+    /**
+     * The queue is active and there are items in it and it is not blocked.
+     */
+    RUNNING,
+
+    /**
+     * The queue is active, there are items in the queue but it cannot process them.
+     */
+    BLOCKED
 }

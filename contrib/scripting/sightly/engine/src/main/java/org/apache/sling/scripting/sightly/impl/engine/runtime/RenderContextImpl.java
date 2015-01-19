@@ -16,7 +16,6 @@
  * specific language governing permissions and limitations
  * under the License.
  ******************************************************************************/
-
 package org.apache.sling.scripting.sightly.impl.engine.runtime;
 
 import java.lang.reflect.Field;
@@ -27,7 +26,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Enumeration;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -42,7 +40,6 @@ import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.api.resource.ValueMap;
 import org.apache.sling.scripting.sightly.Record;
 import org.apache.sling.scripting.sightly.SightlyException;
-import org.apache.sling.scripting.sightly.extension.ExtensionInstance;
 import org.apache.sling.scripting.sightly.extension.RuntimeExtension;
 import org.apache.sling.scripting.sightly.render.RenderContext;
 
@@ -62,7 +59,12 @@ public class RenderContextImpl implements RenderContext {
     private final Bindings bindings;
     private final Map<String, RuntimeExtension> mapping;
     private final ResourceResolver scriptResourceResolver;
-    private final Map<String, ExtensionInstance> instanceCache = new HashMap<String, ExtensionInstance>();
+
+    public RenderContextImpl(Bindings bindings, Map<String, RuntimeExtension> mapping, ResourceResolver scriptResourceResolver) {
+        this.bindings = bindings;
+        this.mapping = mapping;
+        this.scriptResourceResolver = scriptResourceResolver;
+    }
 
     public static ResourceResolver getScriptResourceResolver(RenderContext renderContext) {
         if (renderContext instanceof RenderContextImpl) {
@@ -70,12 +72,6 @@ public class RenderContextImpl implements RenderContext {
         }
 
         throw new SightlyException("Cannot retrieve Script ResourceResovler from RenderContext " + renderContext);
-    }
-
-    public RenderContextImpl(Bindings bindings, Map<String, RuntimeExtension> mapping, ResourceResolver scriptResourceResolver) {
-        this.bindings = bindings;
-        this.mapping = mapping;
-        this.scriptResourceResolver = scriptResourceResolver;
     }
 
     public ResourceResolver getScriptResourceResolver() {
@@ -93,24 +89,20 @@ public class RenderContextImpl implements RenderContext {
 
     @Override
     public Object call(String functionName, Object... arguments) {
-        ExtensionInstance instance;
-        instance = instanceCache.get(functionName);
-        if (instance == null) {
-            instance = createInstance(functionName);
-            instanceCache.put(functionName, instance);
-        }
-        return instance.call(arguments);
-    }
-
-    private ExtensionInstance createInstance(String name) {
-        RuntimeExtension extension = mapping.get(name);
+        RuntimeExtension extension = mapping.get(functionName);
         if (extension == null) {
-            throw new SightlyRenderException("Runtime extension is not available: " + name);
+            throw new SightlyRenderException("Runtime extension is not available: " + functionName);
         }
-        return extension.provide(this);
+        return extension.call(this, arguments);
     }
 
-    @Override
+    /**
+     * Retrieve the specified property from the given object
+     *
+     * @param target   - the target object
+     * @param property - the property name
+     * @return - the value of the property or null if the object has no such property
+     */
     public Object resolveProperty(Object target, Object property) {
         if (property instanceof Number) {
             return getIndex(target, ((Number) property).intValue());
@@ -118,22 +110,42 @@ public class RenderContextImpl implements RenderContext {
         return getProperty(target, property);
     }
 
-    @Override
+    /**
+     * Convert the given object to a string.
+     *
+     * @param target - the target object
+     * @return - the string representation of the object
+     */
     public String toString(Object target) {
         return objectToString(target);
     }
 
-    @Override
+    /**
+     * Convert the given object to a boolean value
+     *
+     * @param object - the target object
+     * @return - the boolean representation of that object
+     */
     public boolean toBoolean(Object object) {
         return toBooleanInternal(object);
     }
 
-    @Override
+    /**
+     * Force the conversion of the object to a collection
+     *
+     * @param object - the target object
+     * @return the collection representation of the object
+     */
     public Collection<Object> toCollection(Object object) {
         return obtainCollection(object);
     }
 
-    @Override
+    /**
+     * Force the conversion of the target object to a map
+     *
+     * @param object - the target object
+     * @return - a map representation of the object. Default is an empty map
+     */
     public Map toMap(Object object) {
         if (object instanceof Map) {
             return (Map) object;
@@ -141,8 +153,12 @@ public class RenderContextImpl implements RenderContext {
         return Collections.emptyMap();
     }
 
-
-    @Override
+    /**
+     * Coerce the object to a numeric value
+     *
+     * @param object - the target object
+     * @return - the numeric representation
+     */
     public Number toNumber(Object object) {
         if (object instanceof Number) {
             return (Number) object;
@@ -150,11 +166,15 @@ public class RenderContextImpl implements RenderContext {
         return 0;
     }
 
-    @Override
-    public boolean isCollection(Object obj) {
-        return (obj instanceof Collection) || (obj instanceof Object[])
-                || (obj instanceof Iterable)
-                || (obj instanceof Iterator);
+    /**
+     * Checks if an object is a {@link Collection} or is backed by one.
+     * @param target the target object
+     * @return {@code true} if the {@code target} is a collection or is backed by one, {@code false} otherwise
+     */
+    public boolean isCollection(Object target) {
+        return (target instanceof Collection) || (target instanceof Object[])
+                || (target instanceof Iterable)
+                || (target instanceof Iterator);
     }
 
     @SuppressWarnings("unchecked")
@@ -172,7 +192,7 @@ public class RenderContextImpl implements RenderContext {
             return ((Map) obj).keySet();
         }
         if (obj instanceof Record) {
-            return ((Record) obj).properties();
+            return ((Record) obj).getPropertyNames();
         }
         if (obj instanceof Enumeration) {
             return Collections.list((Enumeration<Object>) obj);
@@ -245,7 +265,7 @@ public class RenderContextImpl implements RenderContext {
             result = getMapProperty((Map) target, property);
         }
         if (result == null && target instanceof Record) {
-            result = ((Record) target).get(property);
+            result = ((Record) target).getProperty(property);
         }
         if (result == null) {
             result = getObjectProperty(target, property);
@@ -289,9 +309,11 @@ public class RenderContextImpl implements RenderContext {
     }
 
     private Object getObjectProperty(Object obj, String property) {
-        Object result = getObjectNoArgMethod(obj, property);
-        if (result != null) return result;
-        return getField(obj, property);
+        try {
+            return getObjectNoArgMethod(obj, property);
+        } catch (NoSuchMethodException nsmex) {
+            return getField(obj, property);
+        }
     }
 
     private Object getField(Object obj, String property) {
@@ -308,21 +330,18 @@ public class RenderContextImpl implements RenderContext {
         }
     }
 
-    private Object getObjectNoArgMethod(Object obj, String property) {
+    private Object getObjectNoArgMethod(Object obj, String property) throws NoSuchMethodException {
         Class<?> cls = obj.getClass();
         Method method = findMethod(cls, property);
-        if (method != null) {
-            try {
-                method = extractMethodInheritanceChain(cls, method);
-                return method.invoke(obj);
-            } catch (Exception e) {
-                throw new SightlyRenderException(e);
-            }
+        try {
+            method = extractMethodInheritanceChain(cls, method);
+            return method.invoke(obj);
+        } catch (Exception e) {
+            throw new SightlyRenderException(e);
         }
-        return null;
     }
 
-    private Method findMethod(Class<?> cls, String baseName) {
+    private Method findMethod(Class<?> cls, String baseName) throws NoSuchMethodException {
         Method[] publicMethods = cls.getMethods();
         String capitalized = StringUtils.capitalize(baseName);
         for (Method m : publicMethods) {
@@ -339,7 +358,8 @@ public class RenderContextImpl implements RenderContext {
                 }
             }
         }
-        return null;
+
+        throw new NoSuchMethodException(baseName);
     }
 
     private boolean isMethodAllowed(Method method) {

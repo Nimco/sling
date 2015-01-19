@@ -53,12 +53,12 @@ public abstract class RenderUnit implements Record<RenderUnit> {
     }
 
     @Override
-    public RenderUnit get(String name) {
+    public RenderUnit getProperty(String name) {
         return subTemplates.get(name.toLowerCase());
     }
 
     @Override
-    public Set<String> properties() {
+    public Set<String> getPropertyNames() {
         return subTemplates.keySet();
     }
 
@@ -73,8 +73,9 @@ public abstract class RenderUnit implements Record<RenderUnit> {
             return;
         }
         RenderUnit unit = (RenderUnit) templateObj;
-        SlingScriptHelper ssh = (SlingScriptHelper) renderContext.getBindings().get(SlingBindings.SLING);
-        Map<String, Object> argumentsMap = renderContext.toMap(argsObj);
+        RenderContextImpl renderContextImpl = (RenderContextImpl) renderContext;
+        SlingScriptHelper ssh = (SlingScriptHelper) renderContextImpl.getBindings().get(SlingBindings.SLING);
+        Map<String, Object> argumentsMap = renderContextImpl.toMap(argsObj);
         Bindings arguments = new SimpleBindings(Collections.unmodifiableMap(argumentsMap));
         unit.render(renderContext, arguments);
     }

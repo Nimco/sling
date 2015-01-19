@@ -21,7 +21,6 @@ package org.apache.sling.distribution.agent.impl;
 import org.apache.sling.commons.osgi.PropertiesUtil;
 import org.apache.sling.distribution.agent.DistributionAgent;
 import org.apache.sling.distribution.component.impl.DistributionComponentUtils;
-import org.apache.sling.distribution.resources.DistributionConstants;
 import org.apache.sling.distribution.resources.impl.OsgiUtils;
 import org.apache.sling.distribution.trigger.DistributionTrigger;
 import org.osgi.framework.BundleContext;
@@ -52,7 +51,7 @@ public abstract class AbstractDistributionAgentFactory {
     private BundleContext savedContext;
     private Map<String, Object> savedConfig;
     private String agentName;
-    List<DistributionTrigger> triggers = new CopyOnWriteArrayList<DistributionTrigger>();
+    private List<DistributionTrigger> triggers = new CopyOnWriteArrayList<DistributionTrigger>();
 
     private SimpleDistributionAgent agent;
 
@@ -74,9 +73,6 @@ public abstract class AbstractDistributionAgentFactory {
             agentName = PropertiesUtil.toString(config.get(NAME), null);
             props.put(NAME, agentName);
 
-            boolean isResource = PropertiesUtil.toBoolean(config.get(DistributionConstants.PN_IS_RESOURCE), false);
-            props.put(DistributionConstants.PN_IS_RESOURCE, isResource);
-
             if (componentReg == null) {
 
                 try {
@@ -93,6 +89,10 @@ public abstract class AbstractDistributionAgentFactory {
                     // register agent service
                     componentReg = context.registerService(DistributionAgent.class.getName(), agent, props);
                     agent.enable();
+
+                    for (DistributionTrigger trigger : triggers) {
+                        agent.enableTrigger(trigger);
+                    }
                 }
 
                 log.info("activated agent {}", agentName);
@@ -122,8 +122,13 @@ public abstract class AbstractDistributionAgentFactory {
             ServiceReference reference = componentReg.getReference();
             Object service = context.getService(reference);
             if (service instanceof SimpleDistributionAgent) {
-                ((SimpleDistributionAgent) service).disable();
+                SimpleDistributionAgent agent = (SimpleDistributionAgent) service;
+                for (DistributionTrigger trigger : triggers) {
+                    agent.disableTrigger(trigger);
+                }
+                triggers.clear();
 
+                agent.disable();
             }
 
             componentReg.unregister();
@@ -132,8 +137,6 @@ public abstract class AbstractDistributionAgentFactory {
         }
 
         log.info("deactivated agent {}", agentName);
-
-
     }
 
 

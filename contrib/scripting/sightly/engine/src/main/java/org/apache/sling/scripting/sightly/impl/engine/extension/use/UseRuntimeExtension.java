@@ -35,13 +35,12 @@ import org.apache.felix.scr.annotations.Reference;
 import org.apache.felix.scr.annotations.ReferenceCardinality;
 import org.apache.felix.scr.annotations.ReferencePolicy;
 import org.apache.felix.scr.annotations.Service;
-import org.apache.sling.scripting.sightly.extension.ExtensionInstance;
+import org.apache.sling.scripting.sightly.SightlyException;
 import org.apache.sling.scripting.sightly.extension.RuntimeExtension;
-import org.apache.sling.scripting.sightly.extension.RuntimeExtensionException;
+import org.apache.sling.scripting.sightly.impl.engine.runtime.RenderContextImpl;
 import org.apache.sling.scripting.sightly.impl.plugin.UsePlugin;
 import org.apache.sling.scripting.sightly.render.RenderContext;
 import org.apache.sling.scripting.sightly.use.ProviderOutcome;
-import org.apache.sling.scripting.sightly.use.SightlyUseException;
 import org.apache.sling.scripting.sightly.use.UseProvider;
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.ServiceReference;
@@ -65,33 +64,27 @@ public class UseRuntimeExtension implements RuntimeExtension {
     private final Map<ServiceReference, UseProvider> providersMap = new ConcurrentSkipListMap<ServiceReference, UseProvider>();
 
     @Override
-    @SuppressWarnings("unchecked")
-    public ExtensionInstance provide(final RenderContext renderContext) {
-        return new ExtensionInstance() {
-
-            @Override
-            public Object call(Object... arguments) {
-                if (arguments.length != 2) {
-                    throw new RuntimeExtensionException("Use extension requires two arguments");
-                }
-                String identifier = renderContext.toString(arguments[0]);
-                if (StringUtils.isEmpty(identifier)) {
-                    return null;
-                }
-                Map<String, Object> useArgumentsMap = renderContext.toMap(arguments[1]);
-                Bindings useArguments = new SimpleBindings(Collections.unmodifiableMap(useArgumentsMap));
-                ArrayList<UseProvider> providers = new ArrayList<UseProvider>(providersMap.values());
-                ListIterator<UseProvider> iterator = providers.listIterator(providers.size());
-                while (iterator.hasPrevious()) {
-                    UseProvider provider = iterator.previous();
-                    ProviderOutcome outcome = provider.provide(identifier, renderContext, useArguments);
-                    if (outcome.isSuccess()) {
-                        return outcome.getResult();
-                    }
-                }
-                throw new SightlyUseException("No use provider could resolve identifier: " + identifier);
+    public Object call(final RenderContext renderContext, Object... arguments) {
+        if (arguments.length != 2) {
+            throw new SightlyException("Use extension requires two arguments");
+        }
+        RenderContextImpl renderContextImpl = (RenderContextImpl) renderContext;
+        String identifier = renderContextImpl.toString(arguments[0]);
+        if (StringUtils.isEmpty(identifier)) {
+            return null;
+        }
+        Map<String, Object> useArgumentsMap = renderContextImpl.toMap(arguments[1]);
+        Bindings useArguments = new SimpleBindings(Collections.unmodifiableMap(useArgumentsMap));
+        ArrayList<UseProvider> providers = new ArrayList<UseProvider>(providersMap.values());
+        ListIterator<UseProvider> iterator = providers.listIterator(providers.size());
+        while (iterator.hasPrevious()) {
+            UseProvider provider = iterator.previous();
+            ProviderOutcome outcome = provider.provide(identifier, renderContext, useArguments);
+            if (outcome.isSuccess()) {
+                return outcome.getResult();
             }
-        };
+        }
+        throw new SightlyException("No use provider could resolve identifier: " + identifier);
     }
 
     // OSGi ################################################################################################################################
