@@ -23,6 +23,7 @@ import org.apache.felix.scr.annotations.Component;
 import org.apache.felix.scr.annotations.ConfigurationPolicy;
 import org.apache.felix.scr.annotations.Deactivate;
 import org.apache.felix.scr.annotations.Property;
+import org.apache.felix.scr.annotations.PropertyOption;
 import org.apache.felix.scr.annotations.Reference;
 import org.apache.felix.scr.annotations.ReferenceCardinality;
 import org.apache.felix.scr.annotations.ReferencePolicy;
@@ -31,6 +32,7 @@ import org.apache.sling.api.resource.ResourceResolverFactory;
 import org.apache.sling.commons.osgi.PropertiesUtil;
 import org.apache.sling.distribution.component.impl.DistributionComponentUtils;
 import org.apache.sling.distribution.event.impl.DistributionEventFactory;
+import org.apache.sling.distribution.log.impl.DefaultDistributionLog;
 import org.apache.sling.distribution.packaging.DistributionPackageExporter;
 import org.apache.sling.distribution.packaging.DistributionPackageImporter;
 import org.apache.sling.distribution.packaging.impl.exporter.RemoteDistributionPackageExporter;
@@ -55,7 +57,7 @@ import java.util.Map;
  * An OSGi service factory for {@link org.apache.sling.distribution.agent.DistributionAgent}s which references already existing OSGi services.
  */
 @Component(metatype = true,
-        label = "Sling Distribution - Reverse Agents Factory",
+        label = "Sling Distribution Agent - Reverse Agents Factory",
         description = "OSGi configuration factory for reverse agents",
         configurationFactory = true,
         specVersion = "1.1",
@@ -67,47 +69,66 @@ import java.util.Map;
 public class ReverseDistributionAgentFactory extends AbstractDistributionAgentFactory {
     private final Logger log = LoggerFactory.getLogger(getClass());
 
-    @Property(label = "Name")
+
+    @Property(label = "Name", description = "The name of the agent.")
     public static final String NAME = DistributionComponentUtils.PN_NAME;
 
-    @Property(boolValue = true, label = "Enabled")
+    @Property(boolValue = true, label = "Enabled", description = "Whether or not to start the distribution agent.")
     private static final String ENABLED = "enabled";
 
 
-    @Property(label = "Service Name")
+    @Property(label = "Service Name", description = "The name of the service used to access the repository.")
     public static final String SERVICE_NAME = "serviceName";
+
+    @Property(options = {
+            @PropertyOption(name = "debug", value = "debug"), @PropertyOption(name = "info", value = "info"),  @PropertyOption(name = "warn", value = "warn"),
+            @PropertyOption(name = "error", value = "error")},
+            value = "info",
+            label = "Log Level", description = "The log level recorded in the transient log accessible via http."
+    )
+    public static final String LOG_LEVEL = AbstractDistributionAgentFactory.LOG_LEVEL;
+
+
+    @Property(boolValue = true, label = "Queue Processing Enabled", description = "Whether or not the distribution agent should process packages in the queues.")
+    public static final String QUEUE_PROCESSING_ENABLED = "queue.processing.enabled";
+
 
     /**
      * endpoints property
      */
-    @Property(cardinality = 100)
+    @Property(cardinality = 100, label = "Importer Endpoints", description = "List of endpoints from which packages are received (exported).")
     public static final String EXPORTER_ENDPOINTS = "packageExporter.endpoints";
 
     /**
      * no. of items to poll property
      */
-    @Property(name = "pull items", description = "number of subsequent pull requests to make", intValue = 1)
+    @Property(intValue = 10, label = "Pull Items", description = "Number of subsequent pull requests to make.")
     public static final String PULL_ITEMS = "pull.items";
 
-    @Reference
-    private Packaging packaging;
 
-    @Property(name = "requestAuthorizationStrategy.target")
+    @Property(name = "requestAuthorizationStrategy.target", label = "Request Authorization Strategy", description = "The target reference for the DistributionRequestAuthorizationStrategy used to authorize the access to distribution process," +
+            "e.g. use target=(name=...) to bind to services by name.")
     @Reference(name = "requestAuthorizationStrategy")
     private DistributionRequestAuthorizationStrategy requestAuthorizationStrategy;
 
 
-    @Property(name = "transportSecretProvider.target")
+    @Property(name = "transportSecretProvider.target", label = "Transport Secret Provider", description = "The target reference for the DistributionTransportSecretProvider used to obtain the credentials used for accessing the remote endpoints, " +
+            "e.g. use target=(name=...) to bind to services by name.")
     @Reference(name = "transportSecretProvider")
     DistributionTransportSecretProvider transportSecretProvider;
 
 
-    @Property(name = "packageBuilder.target")
+    @Property(name = "packageBuilder.target", label = "Package Builder", description = "The target reference for the DistributionPackageBuilder used to create distribution packages, " +
+            "e.g. use target=(name=...) to bind to services by name.")
     @Reference(name = "packageBuilder")
     private DistributionPackageBuilder packageBuilder;
 
-    @Property(value = DEFAULT_TRIGGER_TARGET)
+    @Property(value = DEFAULT_TRIGGER_TARGET, label = "Triggers", description = "The target reference for DistributionTrigger used to trigger distribution, " +
+            "e.g. use target=(name=...) to bind to services by name.")
     public static final String TRIGGERS_TARGET = "triggers.target";
+
+    @Reference
+    private Packaging packaging;
 
     @Reference
     private DistributionEventFactory distributionEventFactory;
@@ -142,8 +163,10 @@ public class ReverseDistributionAgentFactory extends AbstractDistributionAgentFa
     }
 
     @Override
-    protected SimpleDistributionAgent createAgent(String agentName, BundleContext context, Map<String, Object> config) {
+    protected SimpleDistributionAgent createAgent(String agentName, BundleContext context, Map<String, Object> config, DefaultDistributionLog distributionLog) {
         String serviceName = PropertiesUtil.toString(config.get(SERVICE_NAME), null);
+        boolean queueProcessingEnabled = PropertiesUtil.toBoolean(config.get(QUEUE_PROCESSING_ENABLED), true);
+
 
         String[] exporterEndpoints = PropertiesUtil.toStringArray(config.get(EXPORTER_ENDPOINTS), new String[0]);
 
@@ -157,9 +180,9 @@ public class ReverseDistributionAgentFactory extends AbstractDistributionAgentFa
 
         DistributionQueueDispatchingStrategy dispatchingStrategy = new SingleQueueDispatchingStrategy();
 
-        return new SimpleDistributionAgent(agentName, false, serviceName,
+        return new SimpleDistributionAgent(agentName, queueProcessingEnabled, serviceName,
                 packageImporter, packageExporter, requestAuthorizationStrategy,
-                queueProvider, dispatchingStrategy, distributionEventFactory, resourceResolverFactory);
+                queueProvider, dispatchingStrategy, distributionEventFactory, resourceResolverFactory, distributionLog);
 
 
     }

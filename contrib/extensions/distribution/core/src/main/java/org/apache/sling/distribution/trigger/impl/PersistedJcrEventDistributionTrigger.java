@@ -41,7 +41,7 @@ import org.slf4j.LoggerFactory;
  */
 public class PersistedJcrEventDistributionTrigger extends AbstractJcrEventTrigger implements DistributionTrigger {
 
-    private static final String DEFAULT_NUGGETS_PATH = "/var/distribution/nuggets";
+    public static final String DEFAULT_NUGGETS_PATH = "/var/distribution/nuggets";
 
     private final Logger log = LoggerFactory.getLogger(getClass());
 
@@ -132,7 +132,7 @@ public class PersistedJcrEventDistributionTrigger extends AbstractJcrEventTrigge
                 initializeNuggetsPath(session);
             }
         } catch (RepositoryException e) {
-            log.warn("could not create nuggets path " + nuggetsPath, e);
+            log.warn("could not create nuggets path {}", nuggetsPath, e);
         }
     }
 }

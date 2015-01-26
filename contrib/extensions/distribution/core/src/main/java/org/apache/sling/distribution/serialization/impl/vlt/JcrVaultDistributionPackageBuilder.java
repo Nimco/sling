@@ -20,7 +20,9 @@ import org.apache.sling.distribution.serialization.impl.AbstractDistributionPack
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.jcr.RepositoryException;
 import javax.jcr.Session;
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.UUID;
 /**
@@ -37,13 +39,12 @@ public class JcrVaultDistributionPackageBuilder  extends AbstractDistributionPac
     private static final String VERSION = "0.0.1";
     private static final String PACKAGE_GROUP = "sling/distribution";
 
-    public static final String PACKAGING_TYPE = "jcrvlt";
     private final Packaging packaging;
     private ImportMode importMode;
     private AccessControlHandling aclHandling;
 
-    public JcrVaultDistributionPackageBuilder(Packaging packaging, ImportMode importMode, AccessControlHandling aclHandling) {
-        super(PACKAGING_TYPE);
+    public JcrVaultDistributionPackageBuilder(String type, Packaging packaging, ImportMode importMode, AccessControlHandling aclHandling) {
+        super(type);
 
         this.packaging = packaging;
 
@@ -61,7 +62,7 @@ public class JcrVaultDistributionPackageBuilder  extends AbstractDistributionPac
             final String[] paths = request.getPaths();
 
             String packageGroup = PACKAGE_GROUP;
-            String packageName = PACKAGING_TYPE + "_" + System.currentTimeMillis() + "_" +  UUID.randomUUID();
+            String packageName = getType() + "_" + System.currentTimeMillis() + "_" +  UUID.randomUUID();
 
 
             WorkspaceFilter filter = VltUtils.createFilter(request);
@@ -74,7 +75,7 @@ public class JcrVaultDistributionPackageBuilder  extends AbstractDistributionPac
 
             log.debug("assembling package {}", packageGroup + '/' + packageName + "-" + VERSION);
             packageManager.assemble(jcrPackage, null);
-            return new JcrVaultDistributionPackage(PACKAGING_TYPE, jcrPackage, session);
+            return new JcrVaultDistributionPackage(getType(), jcrPackage, session);
         } catch (Exception e) {
             throw new DistributionPackageBuildingException(e);
         } finally {
@@ -91,7 +92,7 @@ public class JcrVaultDistributionPackageBuilder  extends AbstractDistributionPac
 
             JcrPackage jcrPackage = packageManager.upload(stream, true);
 
-            return new JcrVaultDistributionPackage(PACKAGING_TYPE, jcrPackage, session);
+            return new JcrVaultDistributionPackage(getType(), jcrPackage, session);
         } catch (Exception e) {
             throw new DistributionPackageReadingException(e);
         } finally {
@@ -135,8 +136,9 @@ public class JcrVaultDistributionPackageBuilder  extends AbstractDistributionPac
             if (jcrPackage == null) {
                 return null;
             }
-            return new JcrVaultDistributionPackage(PACKAGING_TYPE, jcrPackage, session);
-        } catch (Exception e) {
+            return new JcrVaultDistributionPackage(getType(), jcrPackage, session);
+        } catch (RepositoryException e) {
+            log.error("cannot ge package with id {}", id, e);
             return null;
         } finally {
             ungetSession(session);

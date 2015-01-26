@@ -37,10 +37,11 @@ import org.apache.sling.distribution.packaging.DistributionPackage;
 import org.apache.sling.distribution.packaging.DistributionPackageExportException;
 import org.apache.sling.distribution.packaging.DistributionPackageExporter;
 import org.apache.sling.distribution.serialization.DistributionPackageBuilder;
+import org.apache.sling.distribution.serialization.DistributionPackageBuilderProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-@Component(label = "Sling Distribution - Agent Based Package Exporter",
+@Component(label = "Sling Distribution Exporter - Agent Based Package Exporter",
         metatype = true,
         configurationFactory = true,
         specVersion = "1.1",
@@ -51,22 +52,21 @@ public class AgentDistributionPackageExporterFactory implements DistributionPack
     private final Logger log = LoggerFactory.getLogger(getClass());
 
     /**
-     * name of this component.
+     * name of this exporter.
      */
-    @Property
+    @Property(label = "Name", description = "The name of the exporter.")
     public static final String NAME = DistributionComponentUtils.PN_NAME;
 
-    @Property
+    @Property(label = "Queue", description = "The name of the queue from which the packages should be exported.")
     private static final String QUEUE_NAME = "queue";
 
-    @Property(name = "agent.target")
+    @Property(name = "agent.target", label = "The target reference for the DistributionAgent that will be used to export packages.")
     @Reference(name = "agent")
     private DistributionAgent agent;
 
 
-    @Property(name = "packageBuilder.target")
-    @Reference(name = "packageBuilder")
-    DistributionPackageBuilder packageBuilder;
+    @Reference
+    private DistributionPackageBuilderProvider packageBuilderProvider;
 
     private DistributionPackageExporter packageExporter;
 
@@ -76,7 +76,7 @@ public class AgentDistributionPackageExporterFactory implements DistributionPack
 
         String queueName = PropertiesUtil.toString(config.get(QUEUE_NAME), "");
 
-        packageExporter = new AgentDistributionPackageExporter(queueName, agent, packageBuilder);
+        packageExporter = new AgentDistributionPackageExporter(queueName, agent, packageBuilderProvider);
     }
 
     @Nonnull

@@ -71,7 +71,7 @@ class MergingResourceProvider implements ResourceProvider {
         private List<ExcludeEntry> entries = new ArrayList<ExcludeEntry>();
 
         public ParentHidingHandler(final Resource parent) {
-            final ValueMap parentProps = ResourceUtil.getValueMap(parent);
+            final ValueMap parentProps = parent.getValueMap();
             final String[] childrenToHideArray = parentProps.get(MergedResourceConstants.PN_HIDE_CHILDREN, String[].class);
             if (childrenToHideArray != null) {
                 for (final String value : childrenToHideArray) {
@@ -81,9 +81,9 @@ class MergingResourceProvider implements ResourceProvider {
             }
             if (parent != null) {
                 Resource ancestor = parent.getParent();
+                String previousAncestorName = parent.getName();
                 while (ancestor != null) {
-                    String previousAncestorName = parent.getName();
-                    final ValueMap ancestorProps = ResourceUtil.getValueMap(ancestor);
+                    final ValueMap ancestorProps = ancestor.getValueMap();
                     final String[] ancestorChildrenToHideArray = ancestorProps.get(MergedResourceConstants.PN_HIDE_CHILDREN, String[].class);
                     if (ancestorChildrenToHideArray != null) {
                         for (final String value : ancestorChildrenToHideArray) {
@@ -95,6 +95,7 @@ class MergingResourceProvider implements ResourceProvider {
                             }
                         }
                     }
+                    previousAncestorName = ancestor.getName();
                     ancestor = ancestor.getParent();
                 }
             }
@@ -116,7 +117,7 @@ class MergingResourceProvider implements ResourceProvider {
 
         /**
          * Determine if an entry should hide the named resource.
-         * 
+         *
          * @return a non-null value if the entry matches; a null value if it does not
          */
         private Boolean hides(final ExcludeEntry entry, final String name) {

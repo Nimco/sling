@@ -25,6 +25,7 @@ import org.apache.felix.scr.annotations.Component;
 import org.apache.felix.scr.annotations.ConfigurationPolicy;
 import org.apache.felix.scr.annotations.Deactivate;
 import org.apache.felix.scr.annotations.Property;
+import org.apache.felix.scr.annotations.PropertyOption;
 import org.apache.felix.scr.annotations.Reference;
 import org.apache.felix.scr.annotations.ReferenceCardinality;
 import org.apache.felix.scr.annotations.ReferencePolicy;
@@ -32,6 +33,7 @@ import org.apache.sling.api.resource.ResourceResolverFactory;
 import org.apache.sling.commons.osgi.PropertiesUtil;
 import org.apache.sling.distribution.component.impl.DistributionComponentUtils;
 import org.apache.sling.distribution.event.impl.DistributionEventFactory;
+import org.apache.sling.distribution.log.impl.DefaultDistributionLog;
 import org.apache.sling.distribution.packaging.DistributionPackageExporter;
 import org.apache.sling.distribution.packaging.DistributionPackageImporter;
 import org.apache.sling.distribution.queue.impl.DistributionQueueDispatchingStrategy;
@@ -49,7 +51,7 @@ import org.slf4j.LoggerFactory;
  * An OSGi service factory for {@link org.apache.sling.distribution.agent.DistributionAgent}s which references already existing OSGi services.
  */
 @Component(metatype = true,
-        label = "Sling Distribution - Simple Agents Factory",
+        label = "Sling Distribution Agent - Simple Agents Factory",
         description = "OSGi configuration factory for agents",
         configurationFactory = true,
         specVersion = "1.1",
@@ -61,34 +63,50 @@ import org.slf4j.LoggerFactory;
 public class SimpleDistributionAgentFactory extends AbstractDistributionAgentFactory {
     private final Logger log = LoggerFactory.getLogger(getClass());
 
-    @Property(label = "Name")
+
+    @Property(label = "Name", description = "The name of the agent.")
     public static final String NAME = DistributionComponentUtils.PN_NAME;
 
-    @Property(boolValue = true, label = "Enabled")
+    @Property(boolValue = true, label = "Enabled", description = "Whether or not to start the distribution agent.")
     private static final String ENABLED = "enabled";
 
 
-    @Property(boolValue = false, label = "Use this agent as a passive one (only queueing)")
-    public static final String IS_PASSIVE = "isPassive";
-
-
-    @Property(label = "Service Name")
+    @Property(label = "Service Name", description = "The name of the service used to access the repository.")
     public static final String SERVICE_NAME = "serviceName";
 
-    @Property(name = "packageExporter.target")
+    @Property(options = {
+            @PropertyOption(name = "debug", value = "debug"), @PropertyOption(name = "info", value = "info"),  @PropertyOption(name = "warn", value = "warn"),
+            @PropertyOption(name = "error", value = "error")},
+            value = "info",
+            label = "Log Level", description = "The log level recorded in the transient log accessible via http."
+    )
+    public static final String LOG_LEVEL = AbstractDistributionAgentFactory.LOG_LEVEL;
+
+
+    @Property(boolValue = true, label = "Queue Processing Enabled", description = "Whether or not the distribution agent should process packages in the queues.")
+    public static final String QUEUE_PROCESSING_ENABLED = "queue.processing.enabled";
+
+
+    @Property(name = "packageExporter.target", label = "Exporter", description = "The target reference for the DistributionPackageExporter used to receive (export) the distribution packages," +
+            "e.g. use target=(name=...) to bind to services by name.")
     @Reference(name = "packageExporter")
     private DistributionPackageExporter packageExporter;
 
 
-    @Property(name = "packageImporter.target")
+    @Property(name = "packageImporter.target", label = "Importer", description = "The target reference for the DistributionPackageImporter used to send (import) the distribution packages," +
+            "e.g. use target=(name=...) to bind to services by name.")
     @Reference(name = "packageImporter")
     private DistributionPackageImporter packageImporter;
 
-    @Property(name = "requestAuthorizationStrategy.target")
+
+    @Property(name = "requestAuthorizationStrategy.target", label = "Request Authorization Strategy", description = "The target reference for the DistributionRequestAuthorizationStrategy used to authorize the access to distribution process," +
+            "e.g. use target=(name=...) to bind to services by name.")
     @Reference(name = "requestAuthorizationStrategy")
     private DistributionRequestAuthorizationStrategy requestAuthorizationStrategy;
 
-    @Property(value = DEFAULT_TRIGGER_TARGET)
+
+    @Property(value = DEFAULT_TRIGGER_TARGET, label = "Triggers", description = "The target reference for DistributionTrigger used to trigger distribution, " +
+            "e.g. use target=(name=...) to bind to services by name.")
     public static final String TRIGGERS_TARGET = "triggers.target";
 
 
@@ -126,16 +144,16 @@ public class SimpleDistributionAgentFactory extends AbstractDistributionAgentFac
     }
 
     @Override
-    protected SimpleDistributionAgent createAgent(String agentName, BundleContext context, Map<String, Object> config) {
+    protected SimpleDistributionAgent createAgent(String agentName, BundleContext context, Map<String, Object> config, DefaultDistributionLog distributionLog) {
         String serviceName = PropertiesUtil.toString(config.get(SERVICE_NAME), null);
 
-        boolean isPassive = PropertiesUtil.toBoolean(config.get(IS_PASSIVE), false);
+        boolean queueProcessingEnabled = PropertiesUtil.toBoolean(config.get(QUEUE_PROCESSING_ENABLED), true);
 
         DistributionQueueProvider queueProvider =  new JobHandlingDistributionQueueProvider(agentName, jobManager, context);
         DistributionQueueDispatchingStrategy dispatchingStrategy = new SingleQueueDispatchingStrategy();
-        return new SimpleDistributionAgent(agentName, isPassive, serviceName,
+        return new SimpleDistributionAgent(agentName, queueProcessingEnabled, serviceName,
                 packageImporter, packageExporter, requestAuthorizationStrategy,
-                queueProvider, dispatchingStrategy, distributionEventFactory, resourceResolverFactory);
+                queueProvider, dispatchingStrategy, distributionEventFactory, resourceResolverFactory, distributionLog);
 
     }
 }

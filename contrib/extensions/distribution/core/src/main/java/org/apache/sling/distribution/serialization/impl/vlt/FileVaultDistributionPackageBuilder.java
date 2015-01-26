@@ -21,6 +21,7 @@ package org.apache.sling.distribution.serialization.impl.vlt;
 import javax.jcr.Session;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.UUID;
 
@@ -30,6 +31,7 @@ import org.apache.jackrabbit.vault.fs.api.WorkspaceFilter;
 import org.apache.jackrabbit.vault.fs.io.AccessControlHandling;
 import org.apache.jackrabbit.vault.fs.io.ImportOptions;
 import org.apache.jackrabbit.vault.packaging.ExportOptions;
+import org.apache.jackrabbit.vault.packaging.PackageException;
 import org.apache.jackrabbit.vault.packaging.Packaging;
 import org.apache.jackrabbit.vault.packaging.VaultPackage;
 import org.apache.sling.api.resource.ResourceResolver;
@@ -53,8 +55,6 @@ public class FileVaultDistributionPackageBuilder extends AbstractDistributionPac
 
     private static final String VERSION = "0.0.1";
 
-    public static final String PACKAGING_TYPE = "filevlt";
-
     private final Logger log = LoggerFactory.getLogger(getClass());
 
     private final Packaging packaging;
@@ -63,8 +63,8 @@ public class FileVaultDistributionPackageBuilder extends AbstractDistributionPac
 
     private AccessControlHandling aclHandling;
 
-    public FileVaultDistributionPackageBuilder(Packaging packaging, ImportMode importMode, AccessControlHandling aclHandling) {
-        super(PACKAGING_TYPE);
+    public FileVaultDistributionPackageBuilder(String type, Packaging packaging, ImportMode importMode, AccessControlHandling aclHandling) {
+        super(type);
         this.packaging = packaging;
         this.importMode = importMode;
         this.aclHandling = aclHandling;
@@ -82,7 +82,7 @@ public class FileVaultDistributionPackageBuilder extends AbstractDistributionPac
             final String[] paths = request.getPaths();
 
             String packageGroup = "sling/distribution";
-            String packageName = PACKAGING_TYPE + "_" + System.currentTimeMillis() + "_" +  UUID.randomUUID();
+            String packageName = getType() + "_" + System.currentTimeMillis() + "_" +  UUID.randomUUID();
 
             WorkspaceFilter filter = VltUtils.createFilter(request);
             ExportOptions opts = VltUtils.getExportOptions(filter, packageGroup, packageName, VERSION);
@@ -90,7 +90,7 @@ public class FileVaultDistributionPackageBuilder extends AbstractDistributionPac
             log.debug("assembling package {}", packageGroup + '/' + packageName + "-" + VERSION);
             File tmpFile = File.createTempFile("rp-vlt-create-" + System.nanoTime(), ".zip");
             VaultPackage vaultPackage = packaging.getPackageManager().assemble(session, opts, tmpFile);
-            return new FileVaultDistributionPackage(vaultPackage);
+            return new FileVaultDistributionPackage(getType(), vaultPackage);
         } catch (Exception e) {
             throw new DistributionPackageBuildingException(e);
         } finally {
@@ -112,7 +112,7 @@ public class FileVaultDistributionPackageBuilder extends AbstractDistributionPac
             VaultPackage vaultPackage = packaging.getPackageManager().open(tmpFile);
 
             if (vaultPackage != null) {
-                pkg = new FileVaultDistributionPackage(vaultPackage);
+                pkg = new FileVaultDistributionPackage(getType(), vaultPackage);
             } else {
                 log.warn("stream could not be read as a vlt package");
             }
@@ -131,10 +131,10 @@ public class FileVaultDistributionPackageBuilder extends AbstractDistributionPac
             File file = new File(id);
             if (file.exists()) {
                 VaultPackage pkg = packaging.getPackageManager().open(file);
-                distributionPackage = new FileVaultDistributionPackage(pkg);
+                distributionPackage = new FileVaultDistributionPackage(getType(), pkg);
             }
-        } catch (Exception e) {
-            log.warn("could not find a package with id : {}", id);
+        } catch (IOException e) {
+            log.warn("could not find a package with id {}", id, e);
         }
         return distributionPackage;
     }
@@ -164,4 +164,6 @@ public class FileVaultDistributionPackageBuilder extends AbstractDistributionPac
         }
         return false;
     }
+
+
 }

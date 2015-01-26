@@ -94,6 +94,7 @@ import org.slf4j.LoggerFactory;
 
 @Component(metatype = true, immediate = true)
 @Service(value = ModelFactory.class)
+@SuppressWarnings("deprecation")
 public class ModelAdapterFactory implements AdapterFactory, Runnable, ModelFactory {
 
     private static class DisposalCallbackRegistryImpl implements DisposalCallbackRegistry {
@@ -967,6 +968,14 @@ public class ModelAdapterFactory implements AdapterFactory, Runnable, ModelFacto
 
     InjectAnnotationProcessorFactory[] getInjectAnnotationProcessorFactories() {
         return sortedInjectAnnotationProcessorFactories;
+    }
+
+    InjectAnnotationProcessorFactory2[] getInjectAnnotationProcessorFactories2() {
+        return sortedInjectAnnotationProcessorFactories2;
+    }
+
+    Collection<StaticInjectAnnotationProcessorFactory> getStaticInjectAnnotationProcessorFactories() {
+        return staticInjectAnnotationProcessorFactories.values();
     }
 
     ImplementationPicker[] getImplementationPickers() {

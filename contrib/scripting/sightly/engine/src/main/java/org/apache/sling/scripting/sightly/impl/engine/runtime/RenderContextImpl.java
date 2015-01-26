@@ -33,7 +33,6 @@ import java.util.Map;
 import java.util.Set;
 
 import javax.script.Bindings;
-
 import org.apache.commons.lang.StringUtils;
 import org.apache.sling.api.adapter.Adaptable;
 import org.apache.sling.api.resource.ResourceResolver;
@@ -66,14 +65,7 @@ public class RenderContextImpl implements RenderContext {
         this.scriptResourceResolver = scriptResourceResolver;
     }
 
-    public static ResourceResolver getScriptResourceResolver(RenderContext renderContext) {
-        if (renderContext instanceof RenderContextImpl) {
-            return ((RenderContextImpl) renderContext).getScriptResourceResolver();
-        }
-
-        throw new SightlyException("Cannot retrieve Script ResourceResovler from RenderContext " + renderContext);
-    }
-
+    @Override
     public ResourceResolver getScriptResourceResolver() {
         return scriptResourceResolver;
     }
@@ -91,7 +83,7 @@ public class RenderContextImpl implements RenderContext {
     public Object call(String functionName, Object... arguments) {
         RuntimeExtension extension = mapping.get(functionName);
         if (extension == null) {
-            throw new SightlyRenderException("Runtime extension is not available: " + functionName);
+            throw new SightlyException("Runtime extension is not available: " + functionName);
         }
         return extension.call(this, arguments);
     }
@@ -337,7 +329,7 @@ public class RenderContextImpl implements RenderContext {
             method = extractMethodInheritanceChain(cls, method);
             return method.invoke(obj);
         } catch (Exception e) {
-            throw new SightlyRenderException(e);
+            throw new SightlyException(e);
         }
     }
 
@@ -347,14 +339,17 @@ public class RenderContextImpl implements RenderContext {
         for (Method m : publicMethods) {
             if (m.getParameterTypes().length == 0) {
                 String methodName = m.getName();
-                if (baseName.equals(methodName)) {
-                    return (isMethodAllowed(m)) ? m : null;
-                }
-                if (("get" + capitalized).equals(methodName)) {
-                    return (isMethodAllowed(m)) ? m : null;
-                }
-                if (("is" + capitalized).equals(methodName)) {
-                    return (isMethodAllowed(m)) ? m : null;
+                if (baseName.equals(methodName)
+                    || ("get" + capitalized).equals(methodName)
+                    || ("is" + capitalized).equals(methodName)) {
+
+                    // this method is good, check whether allowed
+                    if (isMethodAllowed(m)) {
+                        return m;
+                    }
+
+                    // method would match but is not allwed, abort
+                    break;
                 }
             }
         }
@@ -447,5 +442,4 @@ public class RenderContextImpl implements RenderContext {
         }
         return null;
     }
-
 }

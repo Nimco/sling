@@ -84,5 +84,4 @@ public class DistributionAgentServlet extends SlingAllMethodsServlet {
                     .append(" not found\"}");
         }
     }
-
 }
