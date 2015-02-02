@@ -30,6 +30,7 @@ import org.apache.felix.scr.annotations.ReferencePolicy;
 import org.apache.jackrabbit.vault.packaging.Packaging;
 import org.apache.sling.api.resource.ResourceResolverFactory;
 import org.apache.sling.commons.osgi.PropertiesUtil;
+import org.apache.sling.distribution.DistributionRequestType;
 import org.apache.sling.distribution.component.impl.DistributionComponentUtils;
 import org.apache.sling.distribution.event.impl.DistributionEventFactory;
 import org.apache.sling.distribution.log.impl.DefaultDistributionLog;
@@ -68,6 +69,13 @@ public class QueueDistributionAgentFactory extends AbstractDistributionAgentFact
 
     @Property(label = "Name", description = "The name of the agent.")
     public static final String NAME = DistributionComponentUtils.PN_NAME;
+
+    @Property(label = "Title", description = "The display friendly title of the agent.")
+    public static final String TITLE = "title";
+
+    @Property(label = "Details", description = "The display friendly details of the agent.")
+    public static final String DETAILS = "details";
+
 
     @Property(boolValue = true, label = "Enabled", description = "Whether or not to start the distribution agent.")
     private static final String ENABLED = "enabled";
@@ -141,9 +149,11 @@ public class QueueDistributionAgentFactory extends AbstractDistributionAgentFact
         DistributionQueueProvider queueProvider =  new JobHandlingDistributionQueueProvider(agentName, jobManager, context);
         DistributionQueueDispatchingStrategy dispatchingStrategy = new SingleQueueDispatchingStrategy();
         DistributionPackageExporter packageExporter = new LocalDistributionPackageExporter(packageBuilder);
+        DistributionRequestType[] allowedRequests = new DistributionRequestType[] { DistributionRequestType.ADD, DistributionRequestType.DELETE };
+
 
         return new SimpleDistributionAgent(agentName, false, serviceName,
                 null, packageExporter, requestAuthorizationStrategy,
-                queueProvider, dispatchingStrategy, distributionEventFactory, resourceResolverFactory, distributionLog);
+                queueProvider, dispatchingStrategy, distributionEventFactory, resourceResolverFactory, distributionLog, allowedRequests);
     }
 }
