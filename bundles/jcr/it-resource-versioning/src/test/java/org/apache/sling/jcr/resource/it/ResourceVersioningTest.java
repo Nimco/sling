@@ -35,8 +35,7 @@ import org.apache.jackrabbit.JcrConstants;
 import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.api.resource.ValueMap;
-import org.apache.sling.testing.mock.sling.MockSling;
-import org.apache.sling.testing.mock.sling.ResourceResolverType;
+import org.apache.sling.testing.mock.sling.MockResolverProvider;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -53,7 +52,7 @@ public class ResourceVersioningTest {
 
     @Before
     public void setUp() throws Exception {
-        resolver = MockSling.newResourceResolver(ResourceResolverType.JCR_JACKRABBIT);
+        resolver = MockResolverProvider.getResourceResolver();
         session = resolver.adaptTo(Session.class);
         versionManager = session.getWorkspace().getVersionManager();
         registerNamespace("sling", "http://sling.apache.org/jcr/sling/1.0");

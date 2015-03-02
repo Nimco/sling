@@ -16,28 +16,16 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.sling.scripting.thymeleaf.internal.processor.attr;
+package org.apache.sling.testing.mock.osgi;
 
-public final class SlingPathAttrProcessor extends SlingNodePropertyAttrProcessor {
+/**
+ * Is thrown when a OSGi reference injection fails due to violated constraints.
+ */
+public final class ReferenceViolationException extends RuntimeException {
+    private static final long serialVersionUID = 1L;
 
-    public static final int ATTR_PRECEDENCE = 99;
-
-    public static final String ATTR_NAME = "path";
-
-    public static final String NODE_PROPERTY_NAME = String.format("%s.%s", PREFIX, ATTR_NAME);
-
-    public SlingPathAttrProcessor() {
-        super(ATTR_NAME);
-    }
-
-    @Override
-    public int getPrecedence() {
-        return ATTR_PRECEDENCE;
-    }
-
-    @Override
-    protected String getNodePropertyName() {
-        return NODE_PROPERTY_NAME;
+    public ReferenceViolationException(String message) {
+        super(message);
     }
 
 }

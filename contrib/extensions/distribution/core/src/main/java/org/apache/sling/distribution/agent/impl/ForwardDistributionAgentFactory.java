@@ -60,7 +60,7 @@ import java.util.Map;
  * An OSGi service factory for {@link org.apache.sling.distribution.agent.DistributionAgent}s which references already existing OSGi services.
  */
 @Component(metatype = true,
-        label = "Sling Distribution Agent - Forward Agents Factory",
+        label = "Apache Sling Distribution Agent - Forward Agents Factory",
         description = "OSGi configuration factory for forward agents",
         configurationFactory = true,
         specVersion = "1.1",
@@ -180,6 +180,7 @@ public class ForwardDistributionAgentFactory extends AbstractDistributionAgentFa
     protected SimpleDistributionAgent createAgent(String agentName, BundleContext context, Map<String, Object> config, DefaultDistributionLog distributionLog) {
         String serviceName = PropertiesUtil.toString(config.get(SERVICE_NAME), null);
         String[] allowedRoots = PropertiesUtil.toStringArray(config.get(ALLOWED_ROOTS), null);
+        allowedRoots = SettingsUtils.removeEmptyEntries(allowedRoots);
 
         boolean queueProcessingEnabled = PropertiesUtil.toBoolean(config.get(QUEUE_PROCESSING_ENABLED), true);
 

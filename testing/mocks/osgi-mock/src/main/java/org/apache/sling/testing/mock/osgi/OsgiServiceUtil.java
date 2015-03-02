@@ -25,23 +25,25 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.SortedSet;
 
 import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.ReferencePolicy;
+import org.apache.sling.testing.mock.osgi.OsgiMetadataUtil.OsgiMetadata;
 import org.apache.sling.testing.mock.osgi.OsgiMetadataUtil.Reference;
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.InvalidSyntaxException;
 import org.osgi.framework.ServiceReference;
 import org.osgi.service.component.ComponentContext;
-import org.w3c.dom.Document;
 
 /**
- * Helper methods to inject dependencies and activate services via reflection.
+ * Helper methods to inject dependencies and activate services.
  */
-final class ReflectionServiceUtil {
+final class OsgiServiceUtil {
 
-    private ReflectionServiceUtil() {
+    private OsgiServiceUtil() {
         // static methods only
     }
 
@@ -56,18 +58,24 @@ final class ReflectionServiceUtil {
         Class<?> targetClass = target.getClass();
 
         // get method name for activation/deactivation from osgi metadata
-        Document metadata = OsgiMetadataUtil.getMetadata(targetClass);
-        if (metadata==null) {
+        OsgiMetadata metadata = OsgiMetadataUtil.getMetadata(targetClass);
+        if (metadata == null) {
             throw new NoScrMetadataException(targetClass);
         }
         String methodName;
         if (activate) {
-            methodName = OsgiMetadataUtil.getActivateMethodName(targetClass, metadata);
+            methodName = metadata.getActivateMethodName();
         } else {
-            methodName = OsgiMetadataUtil.getDeactivateMethodName(targetClass, metadata);
+            methodName = metadata.getDeactivateMethodName();
         }
+        boolean fallbackDefaultName = false;
         if (StringUtils.isEmpty(methodName)) {
-            return false;
+            fallbackDefaultName = true;
+            if (activate) {
+                methodName = "activate";
+            } else {
+                methodName = "deactivate";
+            }
         }
 
         // try to find matching activate/deactivate method and execute it
@@ -142,6 +150,9 @@ final class ReflectionServiceUtil {
             return true;
         }
         
+        if (fallbackDefaultName) {
+            return false;
+        }
         throw new RuntimeException("No matching " + (activate ? "activation" : "deactivation") + " method with name '" + methodName + "' "
                 + " found in class " + targetClass.getName());
     }
@@ -156,11 +167,11 @@ final class ReflectionServiceUtil {
         Class<?> targetClass = target.getClass();
 
         // get method name for activation/deactivation from osgi metadata
-        Document metadata = OsgiMetadataUtil.getMetadata(targetClass);
-        if (metadata==null) {
+        OsgiMetadata metadata = OsgiMetadataUtil.getMetadata(targetClass);
+        if (metadata == null) {
             throw new NoScrMetadataException(targetClass);
         }
-        String methodName = OsgiMetadataUtil.getModifiedMethodName(targetClass, metadata);
+        String methodName = metadata.getModifiedMethodName();
         if (StringUtils.isEmpty(methodName)) {
             return false;
         }
@@ -241,13 +252,13 @@ final class ReflectionServiceUtil {
             method.setAccessible(true);
             method.invoke(target, args);
         } catch (IllegalAccessException ex) {
-            throw new RuntimeException("Unable to invoke activate/deactivate method for class "
+            throw new RuntimeException("Unable to invoke method '" + method.getName() + "' for class "
                     + target.getClass().getName(), ex);
         } catch (IllegalArgumentException ex) {
-            throw new RuntimeException("Unable to invoke activate/deactivate method for class "
+            throw new RuntimeException("Unable to invoke method '" + method.getName() + "' for class "
                     + target.getClass().getName(), ex);
         } catch (InvocationTargetException ex) {
-            throw new RuntimeException("Unable to invoke activate/deactivate method for class "
+            throw new RuntimeException("Unable to invoke method '" + method.getName() + "' for class "
                     + target.getClass().getName(), ex.getCause());
         }
     }
@@ -264,11 +275,11 @@ final class ReflectionServiceUtil {
         // collect all declared reference annotations on class and field level
         Class<?> targetClass = target.getClass();
 
-        Document metadata = OsgiMetadataUtil.getMetadata(targetClass);
-        if (metadata==null) {
+        OsgiMetadata metadata = OsgiMetadataUtil.getMetadata(targetClass);
+        if (metadata == null) {
             throw new NoScrMetadataException(targetClass);
         }
-        List<Reference> references = OsgiMetadataUtil.getReferences(targetClass, metadata);
+        List<Reference> references = metadata.getReferences();
         if (references.isEmpty()) {
             return false;
         }
@@ -299,26 +310,33 @@ final class ReflectionServiceUtil {
             boolean isOptional = (reference.getCardinality() == ReferenceCardinality.OPTIONAL_UNARY || reference
                     .getCardinality() == ReferenceCardinality.OPTIONAL_MULTIPLE);
             if (!isOptional) {
-                throw new RuntimeException("Unable to inject mandatory reference '" + reference.getName() + "' for class " + targetClass.getName());
+                throw new ReferenceViolationException("Unable to inject mandatory reference '" + reference.getName() + "' for class " + targetClass.getName());
             }
         }
 
         // multiple references found? check if reference is not multiple
         if (matchingServices.size() > 1
                 && (reference.getCardinality() == ReferenceCardinality.MANDATORY_UNARY || reference.getCardinality() == ReferenceCardinality.OPTIONAL_UNARY)) {
-            throw new RuntimeException("Multiple matches found for unary reference '" + reference.getName() + "' for class "+ targetClass.getName());
+            throw new ReferenceViolationException("Multiple matches found for unary reference '" + reference.getName() + "' for class "+ targetClass.getName());
         }
 
         // try to invoke bind method
-        String bindMethodName = reference.getBind();
-        if (StringUtils.isNotEmpty(bindMethodName)) {
+        for (ServiceInfo matchingService : matchingServices) {
+            invokeBindUnbindMethod(reference, target, matchingService, true);
+        }
+    }
+    
+    private static void invokeBindUnbindMethod(Reference reference, Object target, ServiceInfo serviceInfo, boolean bind) {
+        Class<?> targetClass = target.getClass();
+
+        // try to invoke bind method
+        String methodName = bind ? reference.getBind() : reference.getUnbind();
+        if (StringUtils.isNotEmpty(methodName)) {
             
             // 1. ServiceReference
-            Method bindMethod = getMethod(targetClass, bindMethodName, new Class<?>[] { ServiceReference.class });
-            if (bindMethod != null) {
-                for (ServiceInfo matchingService : matchingServices) {
-                    invokeMethod(target, bindMethod, new Object[] { matchingService.getServiceReference() });
-                }
+            Method method = getMethod(targetClass, methodName, new Class<?>[] { ServiceReference.class });
+            if (method != null) {
+                invokeMethod(target, method, new Object[] { serviceInfo.getServiceReference() });
                 return;
             }
             
@@ -329,28 +347,44 @@ final class ReflectionServiceUtil {
             } catch (ClassNotFoundException e) {
                 throw new RuntimeException("Service reference type not found: " + reference.getInterfaceType());
             }
-            bindMethod = getMethodWithAssignableTypes(targetClass, bindMethodName, new Class<?>[] { interfaceType });
-            if (bindMethod != null) {
-                for (ServiceInfo matchingService : matchingServices) {
-                    invokeMethod(target, bindMethod, new Object[] { matchingService.getServiceInstance() });
-                }
+            method = getMethodWithAssignableTypes(targetClass, methodName, new Class<?>[] { interfaceType });
+            if (method != null) {
+                invokeMethod(target, method, new Object[] { serviceInfo.getServiceInstance() });
                 return;
             }
             
             // 3. assignable from service instance plus map
-            bindMethod = getMethodWithAssignableTypes(targetClass, bindMethodName, new Class<?>[] { interfaceType, Map.class });
-            if (bindMethod != null) {
-                for (ServiceInfo matchingService : matchingServices) {
-                    invokeMethod(target, bindMethod, new Object[] { matchingService.getServiceInstance(), matchingService.getServiceConfig() });
-                }
+            method = getMethodWithAssignableTypes(targetClass, methodName, new Class<?>[] { interfaceType, Map.class });
+            if (method != null) {
+                invokeMethod(target, method, new Object[] { serviceInfo.getServiceInstance(), serviceInfo.getServiceConfig() });
                 return;
             }
         }
 
-        throw new RuntimeException("Bind method with name " + bindMethodName + " not found "
-                + "for reference '" + reference.getName() + "' for class {}" +  targetClass.getName());
+        throw new RuntimeException((bind ? "Bind" : "Unbind") + " method with name " + methodName + " not found "
+                + "for reference '" + reference.getName() + "' for class " +  targetClass.getName());
     }
 
+    /**
+     * Directly invoke bind method on service for the given reference.
+     * @param reference Reference metadata
+     * @param target Target object for reference
+     * @param serviceInfo Service on which to invoke the method
+     */
+    public static void invokeBindMethod(Reference reference, Object target, ServiceInfo serviceInfo) {
+        invokeBindUnbindMethod(reference,  target, serviceInfo, true);
+    }
+    
+    /**
+     * Directly invoke unbind method on service for the given reference.
+     * @param reference Reference metadata
+     * @param target Target object for reference
+     * @param serviceInfo Service on which to invoke the method
+     */
+    public static void invokeUnbindMethod(Reference reference, Object target, ServiceInfo serviceInfo) {
+        invokeBindUnbindMethod(reference,  target, serviceInfo, false);
+    }
+    
     private static List<ServiceInfo> getMatchingServices(Class<?> type, BundleContext bundleContext) {
         List<ServiceInfo> matchingServices = new ArrayList<ServiceInfo>();
         try {
@@ -372,7 +406,33 @@ final class ReflectionServiceUtil {
         return matchingServices;
     }
 
-    private static class ServiceInfo {
+    /**
+     * Collects all references of any registered service that match with any of the exported interfaces of the given service registration.
+     * @param registeredServices Registered Services
+     * @param registration Service registration
+     * @return List of references
+     */
+    public static List<ReferenceInfo> getMatchingDynamicReferences(SortedSet<MockServiceRegistration> registeredServices,
+            MockServiceRegistration registration) {
+        List<ReferenceInfo> references = new ArrayList<ReferenceInfo>();
+        for (MockServiceRegistration existingRegistration : registeredServices) {
+            OsgiMetadata metadata = OsgiMetadataUtil.getMetadata(existingRegistration.getService().getClass());
+            if (metadata != null) {
+                for (Reference reference : metadata.getReferences()) {
+                    if (reference.getPolicy() == ReferencePolicy.DYNAMIC) {
+                        for (String serviceInterface : registration.getClasses()) {
+                            if (StringUtils.equals(serviceInterface, reference.getInterfaceType())) {
+                                references.add(new ReferenceInfo(existingRegistration, reference));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return references;
+    }
+            
+    static class ServiceInfo {
 
         private final Object serviceInstance;
         private final Map<String, Object> serviceConfig;
@@ -382,6 +442,12 @@ final class ReflectionServiceUtil {
             this.serviceInstance = serviceInstance;
             this.serviceConfig = serviceConfig;
             this.serviceReference = serviceReference;
+        }
+
+        public ServiceInfo(MockServiceRegistration registration) {
+            this.serviceInstance = registration.getService();
+            this.serviceConfig = MapUtil.toMap(registration.getProperties());
+            this.serviceReference = registration.getReference();
         }
 
         public Object getServiceInstance() {
@@ -394,6 +460,26 @@ final class ReflectionServiceUtil {
 
         public ServiceReference getServiceReference() {
             return serviceReference;
+        }
+
+    }
+
+    static class ReferenceInfo {
+
+        private final MockServiceRegistration serviceRegistration;
+        private final Reference reference;
+        
+        public ReferenceInfo(MockServiceRegistration serviceRegistration, Reference reference) {
+            this.serviceRegistration = serviceRegistration;
+            this.reference = reference;
+        }
+
+        public MockServiceRegistration getServiceRegistration() {
+            return serviceRegistration;
+        }
+
+        public Reference getReference() {
+            return reference;
         }
 
     }

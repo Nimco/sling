@@ -49,7 +49,7 @@ import org.osgi.service.component.annotations.Modified;
 
 import com.google.common.collect.ImmutableMap;
 
-public class ReflectionServiceUtilTest {
+public class OsgiServiceUtilTest {
 
     private BundleContext bundleContext = MockOsgi.newBundleContext();
     private Service1 service1;
@@ -73,7 +73,7 @@ public class ReflectionServiceUtilTest {
         assertTrue(MockOsgi.activate(service3, bundleContext, service3Config));
 
         assertNotNull(service3.getComponentContext());
-        assertEquals(service3Config, service3.getComponentContext().getProperties());
+        assertEquals(service3Config.get("prop1"), service3.getComponentContext().getProperties().get("prop1"));
 
         assertSame(service1, service3.getReference1());
 
@@ -101,16 +101,16 @@ public class ReflectionServiceUtilTest {
 
         Service3 service3 = new Service3();
         MockOsgi.activate(service3, bundleContext, initialProperites);
-        assertEquals(initialProperites, service3.getConfig());
+        assertEquals(initialProperites.get("prop1"), service3.getConfig().get("prop1"));
         
         Map<String,Object> newProperties = ImmutableMap.<String, Object>of("prop2", "value2");
         MockOsgi.modified(service3, bundleContext, newProperties);
-        assertEquals(newProperties, service3.getConfig());
+        assertEquals(newProperties.get("prop2"), service3.getConfig().get("prop2"));
 
         newProperties = ImmutableMap.<String, Object>of("prop3", "value3");
         Dictionary<String,Object> newPropertiesDictonary = new Hashtable<String,Object>(newProperties);
         MockOsgi.modified(service3, bundleContext, newPropertiesDictonary);
-        assertEquals(newProperties, service3.getConfig());
+        assertEquals(newProperties.get("prop3"), service3.getConfig().get("prop3"));
     }
     
     @Test
@@ -147,6 +147,10 @@ public class ReflectionServiceUtilTest {
         // no methods
     }
 
+    public interface ServiceInterface1Optional {
+        // no methods
+    }
+
     public interface ServiceInterface2 {
         // no methods
     }
@@ -179,6 +183,8 @@ public class ReflectionServiceUtilTest {
 
         @Reference
         private ServiceInterface1 reference1;
+        @Reference(cardinality = ReferenceCardinality.OPTIONAL_UNARY)
+        private ServiceInterface1Optional reference1Optional;
 
         private List<ServiceReference> references2 = new ArrayList<ServiceReference>();
 
@@ -210,6 +216,10 @@ public class ReflectionServiceUtilTest {
             return this.reference1;
         }
 
+        public ServiceInterface1Optional getReference1Optional() {
+            return this.reference1Optional;
+        }
+
         public List<ServiceInterface2> getReferences2() {
             List<ServiceInterface2> services = new ArrayList<ServiceInterface2>();
             for (ServiceReference serviceReference : references2) {
@@ -232,6 +242,14 @@ public class ReflectionServiceUtilTest {
         
         public Map<String, Object> getConfig() {
             return config;
+        }
+
+        protected void bindReference1Optional(ServiceInterface1Optional service) {
+            reference1Optional = service;
+        }
+
+        protected void unbindReference1Optional(ServiceInterface1Optional service) {
+            reference1Optional = null;
         }
 
         protected void bindReference1(ServiceInterface1 service) {

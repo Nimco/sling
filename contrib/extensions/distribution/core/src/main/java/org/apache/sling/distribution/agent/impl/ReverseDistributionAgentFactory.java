@@ -32,6 +32,7 @@ import org.apache.sling.api.resource.ResourceResolverFactory;
 import org.apache.sling.commons.osgi.PropertiesUtil;
 import org.apache.sling.distribution.DistributionRequestType;
 import org.apache.sling.distribution.component.impl.DistributionComponentConstants;
+import org.apache.sling.distribution.component.impl.SettingsUtils;
 import org.apache.sling.distribution.event.impl.DistributionEventFactory;
 import org.apache.sling.distribution.log.impl.DefaultDistributionLog;
 import org.apache.sling.distribution.packaging.DistributionPackageExporter;
@@ -58,7 +59,7 @@ import java.util.Map;
  * An OSGi service factory for {@link org.apache.sling.distribution.agent.DistributionAgent}s which references already existing OSGi services.
  */
 @Component(metatype = true,
-        label = "Sling Distribution Agent - Reverse Agents Factory",
+        label = "Apache Sling Distribution Agent - Reverse Agents Factory",
         description = "OSGi configuration factory for reverse agents",
         configurationFactory = true,
         specVersion = "1.1",
@@ -176,6 +177,8 @@ public class ReverseDistributionAgentFactory extends AbstractDistributionAgentFa
 
 
         String[] exporterEndpoints = PropertiesUtil.toStringArray(config.get(EXPORTER_ENDPOINTS), new String[0]);
+        exporterEndpoints = SettingsUtils.removeEmptyEntries(exporterEndpoints);
+
 
         int pollItems = PropertiesUtil.toInteger(config.get(PULL_ITEMS), Integer.MAX_VALUE);
 
