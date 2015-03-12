@@ -1,4 +1,4 @@
-/*-
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -16,26 +16,15 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+package org.apache.sling.jcr.contentloader;
 
-package org.apache.sling.query.api.internal;
+import java.io.InputStream;
 
 import aQute.bnd.annotation.ConsumerType;
 
-/**
- * Function can transform one value into another.
- * 
- * @author Tomasz Rękawek
- * 
- * @param <F> Input type
- * @param <T> Output type
- */
 @ConsumerType
-public interface Function<F, T> {
-	/**
-	 * Take input F and transform it into output T.
-	 * 
-	 * @param input Input value
-	 * @return Output value
-	 */
-	T apply(F input);
+public interface ContentTypeDetector {
+
+    String detectContentType(InputStream contentStream, String filename);
+
 }

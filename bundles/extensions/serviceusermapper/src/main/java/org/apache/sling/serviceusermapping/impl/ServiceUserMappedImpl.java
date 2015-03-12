@@ -1,4 +1,4 @@
-/*-
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -17,29 +17,15 @@
  * under the License.
  */
 
-package org.apache.sling.query.api;
+package org.apache.sling.serviceusermapping.impl;
 
-import java.util.Iterator;
-import java.util.List;
+import org.apache.sling.serviceusermapping.ServiceUserMapped;
 
-import org.apache.sling.query.selector.parser.Attribute;
-import org.apache.sling.query.selector.parser.SelectorSegment;
+/**
+ * This is a trivial implementation of the marker interface <code>ServiceUserMapped</code>
+ */
+public class ServiceUserMappedImpl implements ServiceUserMapped {
 
-import aQute.bnd.annotation.ConsumerType;
+    static String SERVICEUSERMAPPED = ServiceUserMapped.class.getName();
 
-@ConsumerType
-public interface TreeProvider<T> {
-	Iterator<T> listChildren(T parent);
-
-	T getParent(T element);
-
-	String getName(T element);
-
-	Predicate<T> getPredicate(String type, String name, List<Attribute> attributes);
-
-	Iterator<T> query(List<SelectorSegment> segment, T resource);
-
-	boolean sameElement(T o1, T o2);
-
-	boolean isDescendant(T root, T testedElement);
 }
