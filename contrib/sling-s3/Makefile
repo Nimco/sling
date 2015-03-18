@@ -41,5 +41,8 @@ update-bundles:
 	rm crank.d/*-sling-startlevel-*.txt
 	$(BUNDLES)
 
+install-deps: contrib/crankstart.jar
+	./scripts/download_dependencies.rb *.d/*
+
 clean:
 	rm -rf target sling
