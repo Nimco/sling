@@ -16,12 +16,17 @@
   ~ specific language governing permissions and limitations
   ~ under the License.
   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~-->
-<div data-sly-use.test="test.js" data-sly-unwrap>
-    ${test.tag != null ? test.startTag : '' @ context = "unsafe"}
-    ${test.text @ context = "text"}
-    ${test.tag != null ? test.endTag : '' @ context = "unsafe"}
-    <div data-sly-include="mode.jsp" data-sly-unwrap=""></div>
-    <ul data-sly-test="${test.includeChildren}" data-sly-list.child="${test.children}">
-        <li data-sly-resource="${child.path}"></li>
-    </ul>
-</div>
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Sightly JavaScript Use-API - Sling implementation</title>
+    </head>
+    <body>
+        <section data-sly-use.jsuse="jsuse.js">
+            <div id="resource-name">${jsuse.resourceName}</div>
+            <div id="resource-getName">${jsuse.resourceGetName}</div>
+            <div id="resource-resourceType">${jsuse.resourceResourceType}</div>
+            <div id="resource-getResourceType">${jsuse.resourceGetResourceType}</div>
+        </section>
+    </body>
+</html>

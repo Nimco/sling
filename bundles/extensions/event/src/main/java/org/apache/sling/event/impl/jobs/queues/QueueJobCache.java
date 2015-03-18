@@ -30,12 +30,16 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.resource.ResourceResolver;
+import org.apache.sling.event.impl.jobs.JobConsumerManager;
 import org.apache.sling.event.impl.jobs.JobHandler;
 import org.apache.sling.event.impl.jobs.JobImpl;
 import org.apache.sling.event.impl.jobs.JobTopicTraverser;
+import org.apache.sling.event.impl.jobs.Utility;
 import org.apache.sling.event.impl.jobs.config.JobManagerConfiguration;
+import org.apache.sling.event.jobs.Queue;
 import org.apache.sling.event.jobs.QueueConfiguration;
 import org.apache.sling.event.jobs.QueueConfiguration.Type;
+import org.apache.sling.event.jobs.consumer.JobExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -66,6 +70,9 @@ public class QueueJobCache {
     /** The queue type. */
     private final QueueConfiguration.Type queueType;
 
+    /** Block the cache - for ordered queues only. */
+    private final AtomicBoolean queueIsBlocked = new AtomicBoolean(false);
+
     /**
      * Create a new queue job cache
      * @param configuration Current job manager configuration
@@ -79,6 +86,7 @@ public class QueueJobCache {
         this.queueType = queueType;
         this.topics = new ConcurrentSkipListSet<String>(topics);
         this.topicsWithNewJobs.addAll(topics);
+        this.fillCache();
     }
 
     /**
@@ -106,51 +114,78 @@ public class QueueJobCache {
         return result;
     }
 
+    public void setIsBlocked(final boolean value) {
+        this.queueIsBlocked.set(value);
+    }
+
     /**
-     * Fill the cache
+     * Fill the cache.
+     * No need to sync as this is called from the constructor.
      */
-    public void fillCache() {
-        synchronized ( this.cache ) {
-            if ( this.cache.isEmpty() ) {
-                final Set<String> checkingTopics = new HashSet<String>();
-                checkingTopics.addAll(this.topics);
-                if ( !checkingTopics.isEmpty() ) {
-                    this.loadJobs(checkingTopics);
-                }
-            }
+    private void fillCache() {
+        final Set<String> checkingTopics = new HashSet<String>();
+        checkingTopics.addAll(this.topics);
+        if ( !checkingTopics.isEmpty() ) {
+            this.loadJobs(checkingTopics);
         }
     }
 
     /**
      * Get the next job.
-     * This method is not called concurrently, however
+     * This method is potentially called concurrently, and
      * {@link #reschedule(JobHandler)} and {@link #handleNewTopics(Set)}
      * can be called concurrently.
      */
-    public JobImpl getNextJob(final boolean doFull) {
-        JobImpl result = null;
+    public JobHandler getNextJob(final JobConsumerManager jobConsumerManager,
+            final Queue queue,
+            final boolean doFull) {
+        JobHandler handler = null;
 
-        synchronized ( this.cache ) {
-            if ( this.cache.isEmpty() ) {
-                final Set<String> checkingTopics = new HashSet<String>();
-                synchronized ( this.topicsWithNewJobs ) {
-                    checkingTopics.addAll(this.topicsWithNewJobs);
-                    this.topicsWithNewJobs.clear();
-                }
-                if ( doFull ) {
-                    checkingTopics.addAll(this.topics);
-                }
-                if ( !checkingTopics.isEmpty() ) {
-                    this.loadJobs(checkingTopics);
-                }
-            }
+        if ( !this.queueIsBlocked.get() ) {
+            synchronized ( this.cache ) {
+                boolean retry;
+                do {
+                    retry = false;
+                    if ( this.cache.isEmpty() ) {
+                        final Set<String> checkingTopics = new HashSet<String>();
+                        synchronized ( this.topicsWithNewJobs ) {
+                            checkingTopics.addAll(this.topicsWithNewJobs);
+                            this.topicsWithNewJobs.clear();
+                        }
+                        if ( doFull ) {
+                            checkingTopics.addAll(this.topics);
+                        }
+                        if ( !checkingTopics.isEmpty() ) {
+                            this.loadJobs(checkingTopics);
+                        }
+                    }
 
-            if ( !this.cache.isEmpty() ) {
-                result = this.cache.remove(0);
+                    if ( !this.cache.isEmpty() ) {
+                        final JobImpl job = this.cache.remove(0);
+                        final JobExecutor consumer = jobConsumerManager.getExecutor(job.getTopic());
+
+                        handler = new JobHandler(job, consumer, this.configuration);
+                        if ( (consumer != null || (job.isBridgedEvent() && jobConsumerManager.supportsBridgedEvents())) ) {
+                            if ( !handler.startProcessing(queue) ) {
+                                if ( logger.isDebugEnabled() ) {
+                                    logger.debug("Discarding removed job {}", Utility.toString(job));
+                                }
+                                handler = null;
+                                retry = true;
+                            }
+                        } else {
+                            // no consumer on this instance, assign to another instance
+                            handler.reassign();
+
+                            handler = null;
+                            retry = true;
+                        }
+
+                    }
+                } while ( handler == null && retry);
             }
         }
-
-        return result;
+        return handler;
     }
 
     /**
