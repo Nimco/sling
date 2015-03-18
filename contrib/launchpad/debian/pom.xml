@@ -63,6 +63,7 @@ under the License.
                             <goal>jdeb</goal>
                         </goals>
                         <configuration>
+                            <classifier>all</classifier>
                             <dataSet>
                                 <data>
                                     <src>${project.build.directory}/${launchpad.artifact}-${project.version}-${launchpad.classifier}.jar</src>

@@ -57,7 +57,5 @@ fi
 
 update-rc.d sling defaults
 
-if service sling status; then
-	service sling restart
-fi
+service sling restart
 

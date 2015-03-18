@@ -42,14 +42,14 @@ set +a
 
 JAVA_ARGS="-Xmx384M "
 # Uncomment for debugging:
-#JAVA_DEBUG_ARGS="-agentlib:jdwp=transport=dt_socket,address=30303,server=y,suspend=n"
+JAVA_DEBUG_ARGS="-agentlib:jdwp=transport=dt_socket,address=30303,server=y,suspend=n"
 
 SLING_PORT=8090
 SLING_LISTEN_ADDR=0.0.0.0
 
 SLING_DEFAULT_ARGS="-c $SLING_DATA -p $SLING_PORT -a $SLING_LISTEN_ADDR $DEBUG_ARGS"
 # Uncomment to use gogo shell:
-#JAVA_ARGS+=" -Dgosh.args=--nointeractive"
+JAVA_ARGS+=" -Dgosh.args=--nointeractive"
 # From: http://apache-felix.18485.x6.nabble.com/Gogo-shell-on-standard-input-output-streams-td4845969.html#a4845970
 
 SLING_DEFAULT_ARGS="-c $SLING_DATA -p 8090 -a 0.0.0.0 $DEBUG_ARGS"
