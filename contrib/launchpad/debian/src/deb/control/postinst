@@ -22,9 +22,9 @@ echo $0 $*
 
 
 SLING_DEFAULTS=/etc/default/sling
-if [ ! -e $SLING_DEFAULTS ] ; then
-	cp $SLING_DEFAULTS.sample $SLING_DEFAULTS
-fi
+#if [ ! -e $SLING_DEFAULTS ] ; then
+#	cp $SLING_DEFAULTS.sample $SLING_DEFAULTS
+#fi
 . $SLING_DEFAULTS
 
 SLING_USER=${SLING_USER:-sling}
