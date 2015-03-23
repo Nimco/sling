@@ -15,6 +15,11 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+set -a
+
+# Identification
+SLING_USER=sling
+SLING_GROUP=sling
 
 # sling defaults
 # Note, init script uses :
@@ -38,51 +43,36 @@
 
 RUNMODE=crank
 
+#
+# Base locations - override settings in crankfiles.
+#
+SLING_EXEC=/opt/sling
+SLING_CFG=/etc/sling
+SLING_DEFAULTS=/etc/default/sling
+SLING_DATA=/var/lib/sling
+SLING_LOG_DIR=/var/log/sling
+
+LOG_FILE=$SLING_LOG_DIR/sling-start.log
+
+# Define where to load dependencies from
+M2REPO="${SLING_EXEC}/contrib"
+SLING_SCRIPTS=${SLING_EXEC}/scripts
+CRANKSTART_ENV=${SLING_SCRIPTS}/crankstart.sh
+
+# Bump RAM allowance
 JAVA_ARGS="-Xmx384M "
+
 # Uncomment for debugging:
 JAVA_ARGS+=" -agentlib:jdwp=transport=dt_socket,address=30303,server=y,suspend=n"
 
-## fix in crank.d now
-
-#SLING_DATA=/var/lib/sling
-#SLING_PORT=8090
-#SLING_LISTEN_ADDR=0.0.0.0
-#SLING_DEFAULT_ARGS="-c $SLING_DATA -p $SLING_PORT -a $SLING_LISTEN_ADDR $DEBUG_ARGS"
-#SLING_DEFAULT_ARGS="-c $SLING_DATA -p 8090 -a 0.0.0.0 $DEBUG_ARGS"
-
+#
+# crank file overrides
+#
+JAVA_ARGS+=" -Dport=8090"
+JAVA_ARGS+=" -Dsling.home=${SLING_DATA}"
 
 # Allow gogo shell to run in noninteractive env:
 # From: http://apache-felix.18485.x6.nabble.com/Gogo-shell-on-standard-input-output-streams-td4845969.html#a4845970
 JAVA_ARGS+=" -Dgosh.args=--nointeractive"
 
-# Other defaults.
-
-set -a
-##
-## Parameters used bu sling init.d script.
-##
-
-# Identification
-
-SLING_USER=sling
-SLING_GROUP=sling
-
-# Base locations
-
-SLING_HOME=/opt/sling
-SLING_CFG=/etc/sling
-SLING_DEFAULTS=/etc/default/sling
-SLING_SCRIPTS=${SLING_HOME}/scripts
-# Define where to load dependencies from
-
-M2REPO="${SLING_HOME}/contrib"
-CRANKSTART_ENV=${SLING_SCRIPTS}/crankstart.sh
-
-SLING_LOG_DIR=/var/log/sling
-LOG_FILE=$SLING_LOG_DIR/${NAME}-start.log
-SLING_DATA=/var/lib/sling
-
-JAVA_ARGS+=" -Dsling.home=$SLING_DATA -Dport=8090"
-
-# Setup default locations for sling crankstart Makefile
 set +a

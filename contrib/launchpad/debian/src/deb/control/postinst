@@ -37,7 +37,7 @@ if ! getent group | grep -q $SLING_USER ; then
 	groupadd --system $SLING_GROUP
 fi
 if ! getent passwd | grep -q $SLING_GROUP ; then
-	useradd --home-dir $SLING_HOME --gid $SLING_GROUP $SLING_USER
+	useradd --home-dir $SLING_EXEC --gid $SLING_GROUP $SLING_USER
 fi
 
 # Make data dir
@@ -57,5 +57,7 @@ fi
 
 update-rc.d sling defaults
 
-service sling restart
-
+# Only restart if already running
+if service sling status; then
+	service sling restart
+fi

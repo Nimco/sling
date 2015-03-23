@@ -28,7 +28,7 @@ under the License.
         <version>22</version>
         <relativePath>../../../parent/pom.xml</relativePath>
     </parent>
-    <artifactId>sling-crankstart</artifactId>
+    <artifactId>sling-server</artifactId>
     <packaging>jar</packaging>
     <version>8-SNAPSHOT</version>
     <name>Apache Sling Launchpad Debian Package Builder</name>
@@ -165,8 +165,19 @@ under the License.
                                     <src>${project.build.directory}/${slingConfigDir}</src>
                                     <type>directory</type>
                                     <conffile>true</conffile>
-                                    <excludes>**/.svn/,**/contrib/,**/scripts/</excludes>
+                                    <excludes>**/.svn/,**/contrib/,**/scripts/,**/target/</excludes>
                                     <mapper>
+                                        <type>perm</type>
+                                        <prefix>${slingConfigDir}</prefix>
+                                    </mapper>
+                                </data>
+                                <!-- crank target files, etc - non-conf files, as they are generated -->
+                                <data>
+                                    <src>${project.build.directory}/${slingConfigDir}</src>
+                                    <type>directory</type>
+                                    <includes>**/target/*</includes>
+                                    <mapper>
+                                        <filemode>775</filemode>
                                         <type>perm</type>
                                         <prefix>${slingConfigDir}</prefix>
                                     </mapper>

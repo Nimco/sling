@@ -21,4 +21,8 @@ echo $0 $*
 
 if [ remove = "$1" ]; then
 	update-rc.d -f sling remove
+
+	# Run cleanup script created by prerm
+	CLEANUP=/tmp/sling-cleanup.sh
+	[ -e ${CLEANUP} ] && sh ${CLEANUP}
 fi
