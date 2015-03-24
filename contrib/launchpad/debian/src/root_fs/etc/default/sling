@@ -29,6 +29,15 @@ SLING_GROUP=sling
 # All configuration items are setup in /etc/sling/*
 # The files are processed aggregated using /etc/sling/Makefile to generate
 # the configuration specific start modes.
+# The final mode of execution is determined by the RUNMODE setting below.
+#
+
+##########################################################################
+#
+#                       SET RUNMODE HERE
+#
+# This must be set before sling will run as one needs to make the choice
+# of storage configurations before running for the first time
 #
 # Runtime startup mode options:
 # 	crank 			- tar files for nodes and data
@@ -40,11 +49,12 @@ SLING_GROUP=sling
 #	node store - for node properties and tree structure
 #	data store - for binaries
 #
-
-RUNMODE=crank
+RUNMODE=""
+#
+##########################################################################
 
 #
-# Base locations - override settings in crankfiles.
+# Base locations - override default settings in crankfiles.
 #
 SLING_EXEC=/opt/sling
 SLING_CFG=/etc/sling

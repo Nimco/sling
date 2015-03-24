@@ -58,6 +58,10 @@ function stop () {
 
 function start () {
 
+	if [ ! "${RUNMODE}" ] ; then
+		log_warning_msg "RUNMODE is not set in ${SLING_DEFAULTS}"
+	fi
+
 	check_sling_permissions
 
 	# Get MVN_OPTS from crankstart env file.
