@@ -52,7 +52,7 @@ SLING_DEFAULTS=/etc/default/sling
 SLING_DATA=/var/lib/sling
 SLING_LOG_DIR=/var/log/sling
 
-LOG_FILE=$SLING_LOG_DIR/sling-start.log
+START_LOG_FILE=$SLING_LOG_DIR/startup.log
 
 # Define where to load dependencies from
 M2REPO="${SLING_EXEC}/contrib"
@@ -70,6 +70,7 @@ JAVA_ARGS+=" -agentlib:jdwp=transport=dt_socket,address=30303,server=y,suspend=n
 #
 JAVA_ARGS+=" -Dport=8090"
 JAVA_ARGS+=" -Dsling.home=${SLING_DATA}"
+JAVA_ARGS+=" -Dlog.file=/var/log/sling/sling.log"
 
 # Allow gogo shell to run in noninteractive env:
 # From: http://apache-felix.18485.x6.nabble.com/Gogo-shell-on-standard-input-output-streams-td4845969.html#a4845970

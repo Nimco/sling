@@ -24,5 +24,5 @@ if [ remove = "$1" ]; then
 
 	# Run cleanup script created by prerm
 	CLEANUP=/tmp/sling-cleanup.sh
-	[ -e ${CLEANUP} ] && sh ${CLEANUP}
+	[ -e ${CLEANUP} ] && sh ${CLEANUP} $@
 fi

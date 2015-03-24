@@ -30,12 +30,11 @@
 export FANCYTTY=true
 . /lib/lsb/init-functions
 export PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin
-SLING_DEFAULTS=/etc/default/sling
-[ "$DEBUG" ] && set -x
-if [ -r $SLING_DEFAULTS ] ; then
-	. $SLING_DEFAULTS
+SLING_COMMON=/opt/sling/scripts/sling-common.sh
+if [ -r $SLING_COMMON ] ; then
+	. $SLING_COMMON
 else
-	log_failure_msg "Missing $SLING_DEFAULTS file, cannot read env settings."
+	log_failure_msg "Missing $SLING_COMMON file, cannot read env settings."
 	exit -1
 fi
 
@@ -57,30 +56,9 @@ function stop () {
 	killproc -p $PID $DAEMON TERM
 }
 
-# Make sure premissions & directoreis are OK.
-function check_permissions() {
-	for d in SLING_DATA SLING_EXEC SLING_CFG SLING_LOG_DIR ; do
-		eval n=\$$d
-		if [ ! "${n}" ] ; then
-			log_failure_msg "Missing $d"
-			exit -1
-		fi
-		if [ ! -d ${n} ] ; then
-			echo "Fix type of ${n}"
-			rm -rf ${n}
-			install --directory --owner=${SLING_USER} --group=${SLING_GROUP} ${n}
-		else
-			if [ "$(stat -c '%U' ${n})" != "${SLING_USER}" ] ; then
-				echo "Update ownership of ${n}"
-				chown -R ${SLING_USER}:${SLING_GROUP} ${n}
-			fi
-		fi
-	done
-}
-
 function start () {
 
-	check_permissions
+	check_sling_permissions
 
 	# Get MVN_OPTS from crankstart env file.
 	[ -r $CRANKSTART_ENV ] && . $CRANKSTART_ENV
@@ -90,6 +68,11 @@ function start () {
 	log_daemon_msg "Starting sling serices"
 	rebuild_config
 
+	# Rename old startup log file
+	if [ -e $START_LOG_FILE ] ; then
+		create_time=$(stat -c '%z' "${START_LOG_FILE}"  | sed -e "s/\..\+$//" | tr ' ' '-')
+		mv ${START_LOG_FILE} ${START_LOG_FILE/.log/_${create_time}}.log
+	fi
 	log_progress_msg "Start sling daemon"
 	if start-stop-daemon --start \
 		--chdir "$SLING_EXEC" \
@@ -106,7 +89,7 @@ function start () {
 		${MVN_OPTS} \
 		-jar ${CRANKSTART_JAR} \
 		${SLING_CFG}/target/${RUNMODE}.txt \
-		>>$LOG_FILE 2>&1
+		>$START_LOG_FILE 2>&1
 	then
 		sleep 3
 		status_of_proc -p $PID $DAEMON
