@@ -1,16 +1,9 @@
 /var/log/sling/startup.log {
-  rotate 5
-  size 4M
+  rotate
+  size 10M
   copytruncate
   daily
   compress
   missingok
   notifempty
-}
-
-/var/log/sling/startup_*.log {
-    missingok
-    rotate 0
-    daily
-    maxage 30
 }

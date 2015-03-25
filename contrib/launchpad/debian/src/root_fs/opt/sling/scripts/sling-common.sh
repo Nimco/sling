@@ -54,7 +54,7 @@ function check_sling_permissions() {
 			install --directory --owner=${SLING_USER} --group=${SLING_GROUP} ${n}
 		else
 			if [ "$(stat -c '%U' ${n})" != "${SLING_USER}" ] || [ "$1" = "force" ]; then
-				echo "Update ownership of ${n}"
+				[ "$1" == "force" ] || echo "Update ownership of ${n}"
 				chown -R ${SLING_USER}:${SLING_GROUP} ${n}
 			fi
 		fi
