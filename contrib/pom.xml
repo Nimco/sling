@@ -136,7 +136,7 @@
           <module>scripting/velocity</module>
           <module>scripting/xproc</module>
           <module>launchpad/karaf</module>
-          <!--<module>launchpad/testing</module>-->
+          <module>launchpad/testing</module>
           <module>launchpad/debian</module>
     </modules>
     <profiles>
