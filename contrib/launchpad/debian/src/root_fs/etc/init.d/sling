@@ -73,10 +73,10 @@ function start () {
 		# populated local repo.
 		M2REPO=${SLING_EXEC}/repo
 		rm -rf ${M2REPO}
-        install -d --owner=sling --group=sling  ${M2REPO}
-        for f in ${SLING_EXEC}/contrib* ; do
-                sudo -u sling "cp -sR $f/* ${M2REPO}"
-        done
+		install -d --owner=sling --group=sling  ${M2REPO}
+		for f in ${SLING_EXEC}/contrib* ; do
+			sudo -u sling "cp -sR $f/* ${M2REPO}"
+		done
 		. $CRANKSTART_ENV
 	else
 		log_failure_msg "Missing $CRANKSTART_ENV file, cannot read crankstart env settings."
