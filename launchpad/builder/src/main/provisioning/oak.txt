@@ -5,7 +5,7 @@
     oak.version=1.0.12
 
 # The segment node store is used via a configuration
-[artifacts startLevel=1 runModes=oak]
+[artifacts startLevel=10 runModes=oak]
     org.apache.felix/org.apache.felix.jaas/0.0.2
 
 [artifacts startLevel=15 runModes=oak]
@@ -16,6 +16,9 @@
     org.apache.jackrabbit/oak-mk-api/${oak.version}
     org.apache.jackrabbit/oak-lucene/${oak.version}
     org.apache.jackrabbit/oak-blob/${oak.version}
+
+[artifacts startLevel=15 runModes=oak_mongo]
+    org.mongodb/mongo-java-driver/2.12.2
 
 [configurations runModes=oak]
   org.apache.felix.jaas.Configuration.factory-GuestLoginModule
@@ -36,10 +39,6 @@
     jaas.defaultRealmName="jackrabbit.oak"
     jaas.configProviderName="FelixJaasProvider"
   
-  org.apache.jackrabbit.oak.plugins.segment.SegmentNodeStoreService
-    name="Default\ NodeStore"
-    repository.home="sling/oak/repository"
-
   org.apache.jackrabbit.oak.security.authentication.AuthenticationConfigurationImpl
     org.apache.jackrabbit.oak.authentication.configSpiName="FelixJaasProvider"
 
@@ -53,3 +52,13 @@
     enabledActions=["org.apache.jackrabbit.oak.spi.security.user.action.AccessControlAction"]
     userPrivilegeNames=["jcr:all"]
     groupPrivilegeNames=["jcr:read"]
+
+[configurations runModes=oak_tar]
+  org.apache.jackrabbit.oak.plugins.segment.SegmentNodeStoreService
+    name="Default\ NodeStore"
+    repository.home="sling/oak/repository"
+
+[configurations runModes=oak_mongo]
+  org.apache.jackrabbit.oak.plugins.document.DocumentNodeStoreService
+    mongouri="mongodb://localhost:27017"
+    db="sling"

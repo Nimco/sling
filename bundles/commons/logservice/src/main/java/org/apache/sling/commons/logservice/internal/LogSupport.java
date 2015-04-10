@@ -38,6 +38,7 @@ import org.osgi.service.component.ComponentConstants;
 import org.osgi.service.log.LogEntry;
 import org.osgi.service.log.LogListener;
 import org.osgi.service.log.LogService;
+import org.osgi.service.startlevel.StartLevel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -69,7 +70,7 @@ public class LogSupport implements SynchronousBundleListener, ServiceListener,
     // The loggers by bundle id used for logging messages originated from
     // specific bundles
     @SuppressWarnings("serial")
-    private Map<Long, Logger> loggers = new LinkedHashMap<Long, Logger>(16,
+    private final Map<Long, Logger> loggers = new LinkedHashMap<Long, Logger>(16,
         0.75f, true) {
         private static final int MAX_SIZE = 50;
 
@@ -80,11 +81,14 @@ public class LogSupport implements SynchronousBundleListener, ServiceListener,
     };
 
     // the worker thread actually sending LogEvents to LogListeners
-    private LogEntryDispatcher logEntryDispatcher;
+    private final LogEntryDispatcher logEntryDispatcher;
 
-    /* package */LogSupport() {
+    private final StartLevel startLevelService;
+
+    /* package */LogSupport(final StartLevel startLevelService) {
         logEntryDispatcher = new LogEntryDispatcher(this);
         logEntryDispatcher.start();
+        this.startLevelService = startLevelService;
     }
 
     /* package */void shutdown() {
@@ -347,7 +351,7 @@ public class LogSupport implements SynchronousBundleListener, ServiceListener,
                 message = "FrameworkEvent PACKAGES REFRESHED";
                 break;
             case FrameworkEvent.STARTLEVEL_CHANGED:
-                message = "FrameworkEvent STARTLEVEL CHANGED";
+                message = "FrameworkEvent STARTLEVEL CHANGED to " + this.startLevelService.getStartLevel();
                 break;
             case FrameworkEvent.WARNING:
                 message = "FrameworkEvent WARNING";
@@ -359,7 +363,7 @@ public class LogSupport implements SynchronousBundleListener, ServiceListener,
                 message = "FrameworkEvent " + event.getType();
         }
 
-        LogEntry entry = new LogEntryImpl(event.getBundle(), null, level,
+        final LogEntry entry = new LogEntryImpl(event.getBundle(), null, level,
             message, exception);
         fireLogEvent(entry);
     }
