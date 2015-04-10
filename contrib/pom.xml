@@ -108,17 +108,18 @@
           <module>extensions/distribution/api</module>
           <module>extensions/distribution/core</module>
           <module>extensions/distribution/sample</module>
-          <!--<module>extensions/distribution/it</module>-->
+          <module>extensions/distribution/it</module>
           <module>extensions/oak-s3</module>
           <module>extensions/reqanalyzer</module>
           <module>extensions/resourcemerger</module>
+          <module>extensions/resource-inventory</module>
           <module>extensions/rewriter</module>
+          <module>extensions/security</module>
           <module>extensions/slf4j-mdc</module>
           <module>extensions/sling-query</module>
           <module>extensions/superimposing</module>
           <module>extensions/tenant</module>
           <module>extensions/urlrewriter</module>
-          <!--<module>extensions/validation</module>-->
           <module>extensions/xss</module>
           <module>jcr/compiler</module>
           <module>jcr/jackrabbit-client</module>

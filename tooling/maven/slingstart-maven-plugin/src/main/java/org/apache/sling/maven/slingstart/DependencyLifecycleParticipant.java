@@ -54,8 +54,6 @@ public class DependencyLifecycleParticipant extends AbstractMavenLifecyclePartic
 
     private static final String PLUGIN_ID = "slingstart-maven-plugin";
 
-    private static final String PROVIDED = "provided";
-
     @Requirement
     private Logger log;
 
@@ -71,76 +69,97 @@ public class DependencyLifecycleParticipant extends AbstractMavenLifecyclePartic
 
     @Override
     public void afterProjectsRead(final MavenSession session) throws MavenExecutionException {
-        log.info("Searching for slingstart projects...");
-        try {
-            final Map<String, MavenProject> projectMap = new HashMap<String, MavenProject>();
-            for (final MavenProject project : session.getProjects()) {
-                projectMap.put(project.getGroupId() + ":" + project.getArtifactId() + ":" + project.getVersion(),
-                        project);
-            }
-
-            for (final MavenProject project : session.getProjects()) {
-                for (Plugin plugin : project.getBuild().getPlugins()) {
-                    if (plugin.getArtifactId().equals(PLUGIN_ID)) {
+        log.debug("Searching for slingstart projects...");
+        for (final MavenProject project : session.getProjects()) {
+            for (Plugin plugin : project.getBuild().getPlugins()) {
+                if (plugin.getArtifactId().equals(PLUGIN_ID)) {
+                    log.debug("Found potential slingstart project: " + project);
+                    try {
                         addDependencies(artifactHandlerManager, resolver, log,
                                 session, project, plugin);
+                    } catch (final Exception e) {
+                        throw new MavenExecutionException("Unable to determine plugin-based dependencies for project " + project, e);
                     }
                 }
             }
-        } catch (final Exception e) {
-            throw new MavenExecutionException("Unable to determine plugin-based dependencies", e);
         }
     }
 
     public static void addDependencies(final ArtifactHandlerManager artifactHandlerManager,
             final ArtifactResolver resolver,
             final Logger log,
-            final MavenSession session, final MavenProject project, final Plugin plugin)
+            final MavenSession session,
+            final MavenProject project,
+            final Plugin plugin)
     throws Exception {
-        // check dependent projects first
-        final List<File> dependencies = new ArrayList<File>();
+        // get all projects of the current build
+        final Map<String, MavenProject> projectMap = new HashMap<String, MavenProject>();
+        for (final MavenProject p : session.getProjects()) {
+            projectMap.put(p.getGroupId() + ":" + p.getArtifactId() + ":" + p.getVersion(), p);
+        }
+
+        // check dependent projects first: slingstart or partial system
+        final List<Object> allDependencies = new ArrayList<Object>();
+        final List<File> resolvedModelDependencies = new ArrayList<File>();
         for(final Dependency d : project.getDependencies() ) {
             if ( d.getType().equals(BuildConstants.PACKAGING_SLINGSTART)
               || d.getType().equals(BuildConstants.PACKAGING_PARTIAL_SYSTEM)) {
-                final File modelFile = getSlingstartArtifact(artifactHandlerManager, resolver, project, session, d);
-                dependencies.add(modelFile);
+                // if it's a project from the current reactor build, we can't resolve it right now
+                final String key = d.getGroupId() + ":" + d.getArtifactId() + ":" + d.getVersion();
+                if ( projectMap.containsKey(key) ) {
+                    allDependencies.add(key + ":" + (d.getClassifier() != null ? d.getClassifier() : "")
+                                            + ":" + (d.getType() != null ? d.getType() : ""));
+                } else {
+                    // "external" dependency, we can already resolve it
+                    final File modelFile = getSlingstartArtifact(artifactHandlerManager, resolver, project, session, d);
+                    resolvedModelDependencies.add(modelFile);
+                    allDependencies.add(modelFile);
+                }
             }
         }
 
+        // read local model
         final String directory = nodeValue((Xpp3Dom) plugin.getConfiguration(),
-                "systemsDirectory", new File(project.getBasedir(), "src/main/provisioning").getAbsolutePath());
-        final Model model = ModelUtils.readFullModel(new File(directory), dependencies, project, session, log);
+                "modelDirectory", new File(project.getBasedir(), "src/main/provisioning").getAbsolutePath());
+        final Model model = ModelUtils.readFullModel(new File(directory), resolvedModelDependencies, project, session, log);
 
-        ModelUtils.storeRawModel(project, model);
+        ModelUtils.storeModelInfo(project, model, allDependencies);
 
+        // we have to create an effective model to add the dependencies
         final Model effectiveModel = ModelUtility.getEffectiveModel(model, null);
-
-        ModelUtils.storeEffectiveModel(project, effectiveModel);
 
         if ( project.getPackaging().equals(BuildConstants.PACKAGING_SLINGSTART ) ) {
             // start with base artifact
-            final org.apache.sling.provisioning.model.Artifact base = ModelUtils.getBaseArtifact(effectiveModel);
-            final String[] classifiers = new String[] {null, BuildConstants.CLASSIFIER_APP, BuildConstants.CLASSIFIER_WEBAPP};
-            for(final String c : classifiers) {
-                final Dependency dep = new Dependency();
-                dep.setGroupId(base.getGroupId());
-                dep.setArtifactId(base.getArtifactId());
-                dep.setVersion(base.getVersion());
-                dep.setType(base.getType());
-                dep.setClassifier(c);
-                if ( BuildConstants.CLASSIFIER_WEBAPP.equals(c) ) {
-                    dep.setType(BuildConstants.TYPE_WAR);
-                }
-                dep.setScope(PROVIDED);
+            final ModelUtils.SearchResult result = ModelUtils.findBaseArtifact(effectiveModel);
+            if ( result.artifact != null ) {
+                final String[] classifiers = new String[] {null, BuildConstants.CLASSIFIER_APP, BuildConstants.CLASSIFIER_WEBAPP};
+                for(final String c : classifiers) {
+                    final Dependency dep = new Dependency();
+                    dep.setGroupId(result.artifact.getGroupId());
+                    dep.setArtifactId(result.artifact.getArtifactId());
+                    dep.setVersion(result.artifact.getVersion());
+                    dep.setType(result.artifact.getType());
+                    dep.setClassifier(c);
+                    if ( BuildConstants.CLASSIFIER_WEBAPP.equals(c) ) {
+                        dep.setType(BuildConstants.TYPE_WAR);
+                    }
+                    dep.setScope(Artifact.SCOPE_PROVIDED);
 
-                log.debug("- adding dependency " + dep);
-                project.getDependencies().add(dep);
+                    log.debug("- adding dependency " + dep);
+                    project.getDependencies().add(dep);
+                }
             }
         }
-        addDependencies(effectiveModel, log, project);
+        addDependenciesFromModel(project, effectiveModel, log);
     }
 
-    private static void addDependencies(final Model model, final Logger log, final MavenProject project) {
+    /**
+     * Add all dependencies from the model
+     * @param project The project
+     * @param model The model
+     * @param log The logger
+     */
+    private static void addDependenciesFromModel(final MavenProject project, final Model model, final Logger log) {
         for(final Feature feature : model.getFeatures()) {
             // skip base
             if ( feature.getName().equals(ModelConstants.FEATURE_LAUNCHPAD) ) {
@@ -155,13 +174,22 @@ public class DependencyLifecycleParticipant extends AbstractMavenLifecyclePartic
                         dep.setVersion(a.getVersion());
                         dep.setType(a.getType());
                         dep.setClassifier(a.getClassifier());
-                        dep.setScope(PROVIDED);
+                        dep.setScope(Artifact.SCOPE_PROVIDED);
 
                         log.debug("- adding dependency " + dep);
                         project.getDependencies().add(dep);
                     }
                 }
             }
+        }
+    }
+
+    private static String nodeValue(final Xpp3Dom config, final String name, final String defaultValue) {
+        final Xpp3Dom node = (config == null ? null : config.getChild(name));
+        if (node != null) {
+            return node.getValue();
+        } else {
+            return defaultValue;
         }
     }
 
@@ -186,14 +214,5 @@ public class DependencyLifecycleParticipant extends AbstractMavenLifecyclePartic
             throw new MavenExecutionException("Unable to get artifact for " + d, e);
         }
         return prjArtifact.getFile();
-    }
-
-    private static String nodeValue(final Xpp3Dom config, final String name, final String defaultValue) {
-        final Xpp3Dom node = (config == null ? null : config.getChild(name));
-        if (node != null) {
-            return node.getValue();
-        } else {
-            return defaultValue;
-        }
     }
 }
