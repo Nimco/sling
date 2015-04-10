@@ -109,6 +109,7 @@
           <module>extensions/distribution/core</module>
           <module>extensions/distribution/sample</module>
           <!--<module>extensions/distribution/it</module>-->
+          <module>extensions/oak-s3</module>
           <module>extensions/reqanalyzer</module>
           <module>extensions/resourcemerger</module>
           <module>extensions/rewriter</module>
@@ -131,6 +132,7 @@
           <module>scripting/java</module>
           <module>scripting/jst</module>
           <module>scripting/python</module>
+          <module>scripting/sightly</module>
           <module>scripting/ruby</module>
           <module>scripting/thymeleaf</module>
           <module>scripting/velocity</module>
