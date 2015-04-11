@@ -23,7 +23,7 @@
     
     <properties>
         <gwt.version>1.6.4</gwt.version>
-        <gwt.port>8090</gwt.port>
+        <gwt.port>8080</gwt.port>
         <gwt.debugport>8888</gwt.debugport>
     </properties>
     
