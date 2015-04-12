@@ -18,12 +18,18 @@
  */
 package org.apache.sling.validation.api;
 
+import javax.annotation.CheckForNull;
+import javax.annotation.Nonnull;
+
 import org.apache.sling.api.resource.ValueMap;
 import org.apache.sling.validation.api.exceptions.SlingValidationException;
+
+import aQute.bnd.annotation.ConsumerType;
 
 /**
  * A {@code Validator} is responsible for validating a single piece of information according to an internal constraint.
  */
+@ConsumerType
 public interface Validator <T> {
 
     /**
@@ -66,5 +72,5 @@ public interface Validator <T> {
      * @return validation error message if validation was not successful, {@code null} otherwise. In case an empty string is returned a generic validation error message is used.
      * @throws org.apache.sling.validation.api.exceptions.SlingValidationException if some expected arguments are missing from the arguments map
      */
-    String validate(T data, ValueMap valueMap, ValueMap arguments) throws SlingValidationException;
+    @CheckForNull String validate(@Nonnull T data, @Nonnull ValueMap valueMap, @Nonnull ValueMap arguments) throws SlingValidationException;
 }
