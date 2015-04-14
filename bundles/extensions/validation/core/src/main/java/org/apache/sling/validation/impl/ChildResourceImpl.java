@@ -6,13 +6,15 @@ import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
+import javax.annotation.Nonnull;
+
 import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.resource.ValueMap;
 import org.apache.sling.commons.osgi.PropertiesUtil;
 import org.apache.sling.validation.api.ChildResource;
 import org.apache.sling.validation.api.ResourceProperty;
 import org.apache.sling.validation.api.Validator;
-import org.apache.sling.validation.impl.util.JCRBuilder;
+import org.apache.sling.validation.impl.util.ResourceValidationBuilder;
 
 /**
  * Implements a {@link ChildResource}
@@ -21,11 +23,11 @@ public class ChildResourceImpl implements ChildResource {
 
     private final String name;
     private final Pattern namePattern;
-    private final Set<ResourceProperty> properties;
-    private final List<ChildResource> children;
+    private final @Nonnull Set<ResourceProperty> properties;
+    private final @Nonnull List<ChildResource> children;
     private final boolean isRequired;
 
-    public ChildResourceImpl(Resource modelResource, Resource childResource, Map<String, Validator<?>> validatorsMap, List<ChildResource> children) {
+    public ChildResourceImpl(@Nonnull Resource modelResource, @Nonnull Resource childResource, @Nonnull Map<String, Validator<?>> validatorsMap, @Nonnull List<ChildResource> children) {
         String root = modelResource.getPath();
         if (!childResource.getPath().startsWith(root)) {
             throw new IllegalArgumentException("Expected resource " + childResource.getPath() + " to be under root path " + root);
@@ -49,7 +51,7 @@ public class ChildResourceImpl implements ChildResource {
             namePattern = null;
         }
         isRequired = !PropertiesUtil.toBoolean(childrenProperties.get(Constants.OPTIONAL), false);
-        properties = JCRBuilder.buildProperties(validatorsMap, childResource.getChild(Constants.PROPERTIES));
+        properties = ResourceValidationBuilder.buildProperties(validatorsMap, childResource.getChild(Constants.PROPERTIES));
         this.children = children;
     }
 
@@ -59,7 +61,7 @@ public class ChildResourceImpl implements ChildResource {
     }
 
     @Override
-    public Set<ResourceProperty> getProperties() {
+    public @Nonnull Set<ResourceProperty> getProperties() {
         return properties;
     }
 
@@ -68,7 +70,7 @@ public class ChildResourceImpl implements ChildResource {
         return namePattern;
     }
     
-    public List<ChildResource> getChildren() {
+    public @Nonnull List<ChildResource> getChildren() {
         return children;
     }
 
