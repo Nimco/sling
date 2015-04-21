@@ -34,52 +34,18 @@ import static org.junit.Assert.assertNotNull;
 
 @RunWith(PaxExam.class)
 @ExamReactorStrategy(PerClass.class)
-public class OakSlingIT extends KarafTestSupport {
+public class SlingExtensionSecurityIT extends KarafTestSupport {
 
     @Configuration
     public Option[] configuration() {
         return OptionUtils.combine(baseConfiguration(),
-            addBootFeature("oak-sling")
+            addBootFeature("sling-extension-security")
         );
     }
 
     @Test
-    public void testOrgApacheJackrabbitOakCore() {
-        final Bundle bundle = findBundle("org.apache.jackrabbit.oak-core");
-        assertNotNull(bundle);
-        assertEquals(Bundle.ACTIVE, bundle.getState());
-    }
-
-    @Test
-    public void testOrgApacheJackrabbitOakCommons() {
-        final Bundle bundle = findBundle("org.apache.jackrabbit.oak-commons");
-        assertNotNull(bundle);
-        assertEquals(Bundle.ACTIVE, bundle.getState());
-    }
-
-    @Test
-    public void testOrgApacheJackrabbitOakMkApi() {
-        final Bundle bundle = findBundle("org.apache.jackrabbit.oak-mk-api");
-        assertNotNull(bundle);
-        assertEquals(Bundle.ACTIVE, bundle.getState());
-    }
-
-    @Test
-    public void testOrgApacheJackrabbitOakLucene() {
-        final Bundle bundle = findBundle("org.apache.jackrabbit.oak-lucene");
-        assertNotNull(bundle);
-        assertEquals(Bundle.ACTIVE, bundle.getState());
-    }
-
-    @Test
-    public void testOrgApacheJackrabbitOakBlob() {
-        final Bundle bundle = findBundle("org.apache.jackrabbit.oak-blob");
-        assertNotNull(bundle);
-        assertEquals(Bundle.ACTIVE, bundle.getState());
-    }
-    @Test
-    public void testComGoogleGuava() {
-        final Bundle bundle = findBundle("com.google.guava");
+    public void testOrgApacheSlingSecurity() {
+        final Bundle bundle = findBundle("org.apache.sling.security");
         assertNotNull(bundle);
         assertEquals(Bundle.ACTIVE, bundle.getState());
     }
