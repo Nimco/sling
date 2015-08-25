@@ -18,15 +18,18 @@
  */
 package org.apache.sling.distribution.serialization.impl.vlt;
 
+import javax.annotation.Nonnull;
 import javax.jcr.Session;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.TreeMap;
 import java.util.UUID;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.jackrabbit.vault.fs.api.ImportMode;
+import org.apache.jackrabbit.vault.fs.api.PathFilterSet;
 import org.apache.jackrabbit.vault.fs.api.WorkspaceFilter;
 import org.apache.jackrabbit.vault.fs.io.AccessControlHandling;
 import org.apache.jackrabbit.vault.fs.io.ImportOptions;
@@ -62,34 +65,46 @@ public class FileVaultDistributionPackageBuilder extends AbstractDistributionPac
     private ImportMode importMode;
 
     private AccessControlHandling aclHandling;
-    private final String[] packageRoots;
 
-    public FileVaultDistributionPackageBuilder(String type, Packaging packaging, ImportMode importMode, AccessControlHandling aclHandling, String[] packageRoots) {
+    private final String[] packageRoots;
+    private final File tempDirectory;
+    private final TreeMap<String, PathFilterSet> filters;
+
+
+    public FileVaultDistributionPackageBuilder(String type, Packaging packaging, ImportMode importMode, AccessControlHandling aclHandling, String[] packageRoots, String[] filterRules, String tempFilesFolder) {
         super(type);
         this.packaging = packaging;
         this.importMode = importMode;
         this.aclHandling = aclHandling;
         this.packageRoots = packageRoots;
+
+        this.tempDirectory = VltUtils.getTempFolder(tempFilesFolder);
+        this.filters = VltUtils.parseFilters(filterRules);
+
+
+        log.info("using temp directory {}", tempDirectory == null ? tempDirectory : tempDirectory.getPath());
     }
 
     @Override
-    protected DistributionPackage createPackageForAdd(ResourceResolver resourceResolver, DistributionRequest request)
+    protected DistributionPackage createPackageForAdd(@Nonnull ResourceResolver resourceResolver, @Nonnull DistributionRequest request)
             throws DistributionPackageBuildingException {
         Session session = null;
+        VaultPackage vaultPackage = null;
         try {
             session = getSession(resourceResolver);
 
             String packageGroup = "sling/distribution";
             String packageName = getType() + "_" + System.currentTimeMillis() + "_" +  UUID.randomUUID();
 
-            WorkspaceFilter filter = VltUtils.createFilter(request);
+            WorkspaceFilter filter = VltUtils.createFilter(request, filters);
             ExportOptions opts = VltUtils.getExportOptions(filter, packageRoots, packageGroup, packageName, VERSION);
 
             log.debug("assembling package {}", packageGroup + '/' + packageName + "-" + VERSION);
-            File tmpFile = File.createTempFile("rp-vlt-create-" + System.nanoTime(), ".zip");
-            VaultPackage vaultPackage = packaging.getPackageManager().assemble(session, opts, tmpFile);
+
+            vaultPackage = VltUtils.createPackage(packaging.getPackageManager(), session, opts, tempDirectory);
             return new FileVaultDistributionPackage(getType(), vaultPackage);
         } catch (Exception e) {
+            VltUtils.deletePackage(vaultPackage);
             throw new DistributionPackageBuildingException(e);
         } finally {
             ungetSession(session);
@@ -97,33 +112,24 @@ public class FileVaultDistributionPackageBuilder extends AbstractDistributionPac
     }
 
     @Override
-    protected DistributionPackage readPackageInternal(ResourceResolver resourceResolver, final InputStream stream)
+    protected DistributionPackage readPackageInternal(@Nonnull ResourceResolver resourceResolver, @Nonnull final InputStream stream)
             throws DistributionPackageReadingException {
         log.debug("reading a stream");
-        DistributionPackage pkg = null;
+        VaultPackage vaultPackage = null;
         try {
-            File tmpFile = File.createTempFile("rp-vlt-read-" + System.nanoTime(), ".zip");
-            FileOutputStream fileStream = new FileOutputStream(tmpFile);
-            IOUtils.copy(stream, fileStream);
-            IOUtils.closeQuietly(fileStream);
+            vaultPackage = VltUtils.readPackage(packaging.getPackageManager(), stream, tempDirectory);
 
-            VaultPackage vaultPackage = packaging.getPackageManager().open(tmpFile);
-
-            if (vaultPackage != null) {
-                pkg = new FileVaultDistributionPackage(getType(), vaultPackage);
-            } else {
-                log.warn("stream could not be read as a vlt package");
-            }
+            return new FileVaultDistributionPackage(getType(), vaultPackage);
 
         } catch (Exception e) {
-            throw new DistributionPackageReadingException("could not read / install the package", e);
+            VltUtils.deletePackage(vaultPackage);
+            throw new DistributionPackageReadingException("could not read package", e);
         }
-        return pkg;
     }
 
 
     @Override
-    protected DistributionPackage getPackageInternal(ResourceResolver resourceResolver, String id) {
+    protected DistributionPackage getPackageInternal(@Nonnull ResourceResolver resourceResolver, @Nonnull String id) {
         DistributionPackage distributionPackage = null;
         try {
             File file = new File(id);
@@ -139,7 +145,7 @@ public class FileVaultDistributionPackageBuilder extends AbstractDistributionPac
 
 
     @Override
-    public boolean installPackageInternal(ResourceResolver resourceResolver, DistributionPackage distributionPackage) throws DistributionPackageReadingException {
+    public boolean installPackageInternal(@Nonnull ResourceResolver resourceResolver, @Nonnull DistributionPackage distributionPackage) throws DistributionPackageReadingException {
         log.debug("reading a distribution package stream");
 
         Session session = null;
@@ -155,13 +161,11 @@ public class FileVaultDistributionPackageBuilder extends AbstractDistributionPac
                 return true;
             }
         } catch (Exception e) {
-            log.error("could not read / install the package", e);
+            log.error("could not install the package", e);
             throw new DistributionPackageReadingException(e);
         } finally {
             ungetSession(session);
         }
         return false;
     }
-
-
 }

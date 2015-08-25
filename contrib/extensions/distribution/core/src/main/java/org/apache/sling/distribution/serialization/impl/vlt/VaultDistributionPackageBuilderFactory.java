@@ -89,10 +89,29 @@ public class VaultDistributionPackageBuilderFactory implements DistributionPacka
     public static final String ACL_HANDLING = "aclHandling";
 
     /**
-     * ACL handling property for file vault package builder
+     * Package roots
      */
     @Property(label = "Package Roots", description = "The package roots to be used for created packages. (this is useful for assembling packages with an user that cannot read above the package root)")
     public static final String PACKAGE_ROOTS = "package.roots";
+
+    /**
+     * Package filters
+     */
+    @Property(label = "Package Filters", description = "The package path filters. Filter format: path|+include|-exclude", cardinality = 100)
+    public static final String PACKAGE_FILTERS = "package.filters";
+
+
+    /**
+     * Temp file folder
+     */
+    @Property(label = "Temp Filesystem Folder", description = "The filesystem folder where the temporary files should be saved.")
+    public static final String TEMP_FS_FOLDER = "tempFsFolder";
+
+    /**
+     * Temp file folder
+     */
+    @Property(label = "Temp JCR Folder", description = "The jcr folder where the temporary files should be saved")
+    public static final String TEMP_JCR_FOLDER = "tempJcrFolder";
 
     @Reference
     private Packaging packaging;
@@ -105,24 +124,29 @@ public class VaultDistributionPackageBuilderFactory implements DistributionPacka
 
         String name = PropertiesUtil.toString(config.get(NAME), null);
         String type = PropertiesUtil.toString(config.get(TYPE), null);
-        String importModeString = PropertiesUtil.toString(config.get(IMPORT_MODE), null);
-        String aclHandlingString = PropertiesUtil.toString(config.get(ACL_HANDLING), null);
-        String[] packageRoots = PropertiesUtil.toStringArray(config.get(PACKAGE_ROOTS), null);
-        packageRoots = SettingsUtils.removeEmptyEntries(packageRoots);
+        String importModeString = SettingsUtils.removeEmptyEntry(PropertiesUtil.toString(config.get(IMPORT_MODE), null));
+        String aclHandlingString = SettingsUtils.removeEmptyEntry(PropertiesUtil.toString(config.get(ACL_HANDLING), null));
+
+        String[] packageRoots = SettingsUtils.removeEmptyEntries(PropertiesUtil.toStringArray(config.get(PACKAGE_ROOTS), null));
+        String[] packageFilters = SettingsUtils.removeEmptyEntries(PropertiesUtil.toStringArray(config.get(PACKAGE_FILTERS), null));
+
+        String tempFsFolder =  SettingsUtils.removeEmptyEntry(PropertiesUtil.toString(config.get(TEMP_FS_FOLDER), null));
+        String tempJcrFolder = SettingsUtils.removeEmptyEntry(PropertiesUtil.toString(config.get(TEMP_JCR_FOLDER), null));
 
         ImportMode importMode = null;
-        if (importMode != null) {
-            importMode = ImportMode.valueOf(importModeString);
+        if (importModeString != null) {
+            importMode = ImportMode.valueOf(importModeString.trim());
         }
 
         AccessControlHandling aclHandling = null;
         if (aclHandlingString != null) {
-            aclHandling= AccessControlHandling.valueOf(aclHandlingString);
+            aclHandling= AccessControlHandling.valueOf(aclHandlingString.trim());
         }
+
         if ("filevlt".equals(type)) {
-            packageBuilder = new ResourceSharedDistributionPackageBuilder(new FileVaultDistributionPackageBuilder(name, packaging, importMode, aclHandling, packageRoots));
+            packageBuilder = new ResourceSharedDistributionPackageBuilder(new FileVaultDistributionPackageBuilder(name, packaging, importMode, aclHandling, packageRoots, packageFilters, tempFsFolder));
         } else  {
-            packageBuilder = new ResourceSharedDistributionPackageBuilder(new JcrVaultDistributionPackageBuilder(name, packaging, importMode, aclHandling, packageRoots));
+            packageBuilder = new ResourceSharedDistributionPackageBuilder(new JcrVaultDistributionPackageBuilder(name, packaging, importMode, aclHandling, packageRoots, packageFilters, tempFsFolder, tempJcrFolder));
         }
     }
 

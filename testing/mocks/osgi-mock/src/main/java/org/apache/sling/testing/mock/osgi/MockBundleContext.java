@@ -18,16 +18,24 @@
  */
 package org.apache.sling.testing.mock.osgi;
 
+import static java.util.Collections.synchronizedList;
+import static java.util.Collections.synchronizedMap;
+import static java.util.Collections.synchronizedSortedSet;
+
 import java.io.File;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Dictionary;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
 import org.apache.commons.lang3.StringUtils;
+import org.apache.felix.framework.FilterImpl;
 import org.apache.sling.testing.mock.osgi.OsgiMetadataUtil.Reference;
 import org.apache.sling.testing.mock.osgi.OsgiServiceUtil.ReferenceInfo;
 import org.apache.sling.testing.mock.osgi.OsgiServiceUtil.ServiceInfo;
@@ -37,10 +45,14 @@ import org.osgi.framework.BundleEvent;
 import org.osgi.framework.BundleListener;
 import org.osgi.framework.Filter;
 import org.osgi.framework.FrameworkListener;
+import org.osgi.framework.InvalidSyntaxException;
 import org.osgi.framework.ServiceEvent;
+import org.osgi.framework.ServiceFactory;
 import org.osgi.framework.ServiceListener;
 import org.osgi.framework.ServiceReference;
 import org.osgi.framework.ServiceRegistration;
+
+import com.google.common.collect.ImmutableList;
 
 /**
  * Mock {@link BundleContext} implementation.
@@ -48,9 +60,9 @@ import org.osgi.framework.ServiceRegistration;
 class MockBundleContext implements BundleContext {
 
     private final MockBundle bundle;
-    private final SortedSet<MockServiceRegistration> registeredServices = new TreeSet<MockServiceRegistration>();
-    private final List<ServiceListener> serviceListeners = new ArrayList<ServiceListener>();
-    private final List<BundleListener> bundleListeners = new ArrayList<BundleListener>();
+    private final SortedSet<MockServiceRegistration> registeredServices = synchronizedSortedSet(new TreeSet<MockServiceRegistration>());
+    private final Map<ServiceListener, Filter> serviceListeners = synchronizedMap(new HashMap<ServiceListener, Filter>());
+    private final List<BundleListener> bundleListeners = synchronizedList(new ArrayList<BundleListener>());
 
     public MockBundleContext() {
         this.bundle = new MockBundle(this);
@@ -62,9 +74,8 @@ class MockBundleContext implements BundleContext {
     }
 
     @Override
-    public Filter createFilter(final String s) {
-        // return filter that denies all
-        return new MockFilter();
+    public Filter createFilter(final String s) throws InvalidSyntaxException {
+        return new FilterImpl(s);
     }
 
     @Override
@@ -76,6 +87,11 @@ class MockBundleContext implements BundleContext {
             clazzes = new String[] { clazz };
         }
         return registerService(clazzes, service, properties);
+    }
+
+    // this is part of org.osgi.core 6.0.0
+    public <S> ServiceRegistration registerService(Class<S> clazz, S service, Dictionary<String, ?> properties) {
+        return registerService(clazz.getName(), service, properties);
     }
 
     @SuppressWarnings("unchecked")
@@ -149,16 +165,25 @@ class MockBundleContext implements BundleContext {
     
     @Override
     public ServiceReference getServiceReference(final String clazz) {
-        ServiceReference[] serviceRefs = getServiceReferences(clazz, null);
-        if (serviceRefs != null && serviceRefs.length > 0) {
-            return serviceRefs[0];
-        } else {
-            return null;
+        try {
+            ServiceReference[] serviceRefs = getServiceReferences(clazz, null);
+            if (serviceRefs != null && serviceRefs.length > 0) {
+                return serviceRefs[0];
+            }
         }
+        catch (InvalidSyntaxException ex) {
+            // should not happen
+        }
+        return null;
+    }
+
+    // this is part of org.osgi.core 6.0.0
+    public ServiceReference getServiceReference(Class clazz) {
+        return getServiceReference(clazz.getName());
     }
 
     @Override
-    public ServiceReference[] getServiceReferences(final String clazz, final String filter) {
+    public ServiceReference[] getServiceReferences(final String clazz, final String filter) throws InvalidSyntaxException {
         Set<ServiceReference> result = new TreeSet<ServiceReference>();
         for (MockServiceRegistration serviceRegistration : this.registeredServices) {
             if (serviceRegistration.matches(clazz, filter)) {
@@ -172,15 +197,20 @@ class MockBundleContext implements BundleContext {
         }
     }
 
+    // this is part of org.osgi.core 6.0.0
+    public Collection<ServiceReference> getServiceReferences(Class clazz, String filter) throws InvalidSyntaxException {
+        return ImmutableList.<ServiceReference>copyOf(getServiceReferences(clazz.getName(), filter));
+    }
+
     @Override
-    public ServiceReference[] getAllServiceReferences(final String clazz, final String filter) {
+    public ServiceReference[] getAllServiceReferences(final String clazz, final String filter) throws InvalidSyntaxException {
         // for now just do the same as getServiceReferences
         return getServiceReferences(clazz, filter);
     }
 
     @Override
     public Object getService(final ServiceReference serviceReference) {
-        return ((MockServiceReference) serviceReference).getService();
+        return ((MockServiceReference)serviceReference).getService();
     }
 
     @Override
@@ -191,14 +221,12 @@ class MockBundleContext implements BundleContext {
 
     @Override
     public void addServiceListener(final ServiceListener serviceListener) {
-        addServiceListener(serviceListener, null);
+        serviceListeners.put(serviceListener, null);
     }
 
     @Override
-    public void addServiceListener(final ServiceListener serviceListener, final String s) {
-        if (!serviceListeners.contains(serviceListener)) {
-            serviceListeners.add(serviceListener);
-        }
+    public void addServiceListener(final ServiceListener serviceListener, final String filter) throws InvalidSyntaxException {
+        serviceListeners.put(serviceListener, createFilter(filter));
     }
 
     @Override
@@ -208,8 +236,10 @@ class MockBundleContext implements BundleContext {
 
     private void notifyServiceListeners(int eventType, ServiceReference serviceReference) {
         final ServiceEvent event = new ServiceEvent(eventType, serviceReference);
-        for (ServiceListener serviceListener : serviceListeners) {
-            serviceListener.serviceChanged(event);
+        for ( Map.Entry<ServiceListener, Filter> entry : serviceListeners.entrySet()) {
+            if ( entry.getValue() == null || entry.getValue().match(serviceReference)) {
+                entry.getKey().serviceChanged(event);
+            }
         }
     }
 
@@ -281,5 +311,22 @@ class MockBundleContext implements BundleContext {
     public File getDataFile(final String s) {
         throw new UnsupportedOperationException();
     }
+
+    // this is part of org.osgi.core 6.0.0
+    public Bundle getBundle(String location) {
+        throw new UnsupportedOperationException();
+    }
+
+    // this is part of org.osgi.core 6.0.0
+    public <S> ServiceRegistration registerService(Class<S> clazz, ServiceFactory factory, Dictionary<String, ?> properties) {
+        throw new UnsupportedOperationException();
+    }
+
+    // this is part of org.osgi.core 6.0.0
+    /* class org.osgi.framework.ServiceObjects does not exist in older OSGi versions
+    public ServiceObjects getServiceObjects(ServiceReference reference) {
+        throw new UnsupportedOperationException();
+    }
+    */
 
 }

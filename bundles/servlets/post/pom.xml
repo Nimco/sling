@@ -22,13 +22,13 @@
     <parent>
         <groupId>org.apache.sling</groupId>
         <artifactId>sling</artifactId>
-        <version>22</version>
-        <relativePath>../../../parent/pom.xml</relativePath>
+        <version>24</version>
+        <relativePath/>
     </parent>
 
     <artifactId>org.apache.sling.servlets.post</artifactId>
     <packaging>bundle</packaging>
-    <version>2.3.7-SNAPSHOT</version>
+    <version>2.3.9-SNAPSHOT</version>
 
     <name>Apache Sling Default POST Servlets</name>
     <description>
@@ -85,6 +85,7 @@
               <configuration>
                 <excludes>
                   <exclude>src/main/resources/org/apache/sling/servlets/post/HtmlResponse.html</exclude>
+                  <exclude>src/main/resources/org/apache/sling/servlets/post/HtmlNoGoBackResponse.html</exclude>
                 </excludes>
               </configuration>
             </plugin>

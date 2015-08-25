@@ -25,12 +25,14 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
 import javax.servlet.Filter;
 import javax.servlet.FilterChain;
 import javax.servlet.FilterConfig;
 import javax.servlet.ServletException;
 import javax.servlet.ServletRequest;
 import javax.servlet.ServletResponse;
+
 import org.apache.felix.scr.annotations.Activate;
 import org.apache.felix.scr.annotations.Component;
 import org.apache.felix.scr.annotations.PropertyUnbounded;
@@ -39,6 +41,8 @@ import org.apache.felix.scr.annotations.Properties;
 import org.apache.felix.scr.annotations.Property;
 import org.apache.sling.api.SlingHttpServletRequest;
 import org.apache.sling.api.SlingHttpServletResponse;
+import org.apache.sling.api.resource.Resource;
+import org.apache.sling.api.resource.ValueMap;
 import org.apache.sling.api.wrappers.SlingHttpServletResponseWrapper;
 import org.apache.sling.commons.osgi.PropertiesUtil;
 import org.osgi.service.component.ComponentContext;
@@ -63,6 +67,13 @@ public class ContentDispositionFilter implements Filter {
                     "Invalid entries are logged and ignored."
                     , unbounded = PropertyUnbounded.ARRAY, value = { "" })
     private static final String PROP_CONTENT_DISPOSTION_PATHS = "sling.content.disposition.paths";
+    
+    private static final boolean DEFAULT_ENABLE_CONTENT_DISPOSTION_ALL_PATHS = false;
+    @Property(boolValue = DEFAULT_ENABLE_CONTENT_DISPOSTION_ALL_PATHS ,
+              label = "Enable Content Disposition for all paths",
+              description ="This flag controls whether to enable" +
+                      " Content Disposition for all paths.")
+    private static final String PROP_ENABLE_CONTENT_DISPOSTION_ALL_PATHS = "sling.content.disposition.all.paths";
    
     /**
      * Set of paths
@@ -75,6 +86,8 @@ public class ContentDispositionFilter implements Filter {
     private String[] contentDispositionPathsPfx;
 
     private Map<String, Set<String>> contentTypesMapping;
+    
+    private boolean enableContentDispositionAllPaths;
     
     @Activate
     private void activate(final ComponentContext ctx) {
@@ -127,8 +140,10 @@ public class ContentDispositionFilter implements Filter {
         contentDispositionPathsPfx = pfxs.toArray(new String[pfxs.size()]);
         contentTypesMapping = contentTypesMap.isEmpty()?Collections.<String, Set<String>>emptyMap(): contentTypesMap;
         
-        logger.info("Initialized. content disposition paths: {}, content disposition paths-pfx {}", new Object[]{
-                contentDispositionPaths, contentDispositionPathsPfx}
+        enableContentDispositionAllPaths =  PropertiesUtil.toBoolean(props.get(PROP_ENABLE_CONTENT_DISPOSTION_ALL_PATHS),DEFAULT_ENABLE_CONTENT_DISPOSTION_ALL_PATHS);
+        
+        logger.info("Initialized. content disposition paths: {}, content disposition paths-pfx {}. Enable Content Disposition for all paths is set to {}", new Object[]{
+                contentDispositionPaths, contentDispositionPathsPfx, enableContentDispositionAllPaths}
         );
     }
     
@@ -173,6 +188,13 @@ public class ContentDispositionFilter implements Filter {
 
         private static final String CONTENT_DISPOSTION_ATTACHMENT = "attachment";
         
+        private static final String PROP_JCR_DATA = "jcr:data";
+        
+        private static final String JCR_CONTENT_LEAF = "jcr:content";
+        
+        static final String ATTRIBUTE_NAME =
+                "org.apache.sling.security.impl.ContentDispositionFilter.RewriterResponse.contentType";
+        
         /** The current request. */
         private final SlingHttpServletRequest request;
 
@@ -185,40 +207,80 @@ public class ContentDispositionFilter implements Filter {
          * @see javax.servlet.ServletResponseWrapper#setContentType(java.lang.String)
          */
         public void setContentType(String type) { 
-            String pathInfo = request.getPathInfo();
-
-            if (contentDispositionPaths.contains(pathInfo)) {
-
-                if (contentTypesMapping.containsKey(pathInfo)) {
-                    Set exceptions = contentTypesMapping.get(pathInfo);
-                    if (!exceptions.contains(type)) {
-                        setContentDisposition();
-                    }
-                } else {
-                    setContentDisposition();
-                }
-            }
+            String previousContentType = (String) request.getAttribute(ATTRIBUTE_NAME);
             
-            for (String path : contentDispositionPathsPfx) {
-                if (request.getPathInfo().startsWith(path)) {
-                    if (contentTypesMapping.containsKey(path)) {
-                        Set exceptions = contentTypesMapping.get(path);
+            if (previousContentType != null && previousContentType.equals(type)) {
+                return;
+            }
+            request.setAttribute(ATTRIBUTE_NAME, type);
+            Resource resource = request.getResource();
+            
+            if (enableContentDispositionAllPaths) {
+                setContentDisposition(resource);
+            } else {
+                String resourcePath = resource.getPath();
+
+                boolean contentDispositionAdded = false;
+                if (contentDispositionPaths.contains(resourcePath)) {
+
+                    if (contentTypesMapping.containsKey(resourcePath)) {
+                        Set <String> exceptions = contentTypesMapping.get(resourcePath);
                         if (!exceptions.contains(type)) {
-                            setContentDisposition();
-                            break;
+                            contentDispositionAdded = setContentDisposition(resource);
                         }
                     } else {
-                        setContentDisposition();
-                        break;
+                        contentDispositionAdded = setContentDisposition(resource);
                     }
+                }            
+                if (!contentDispositionAdded) {
+                    for (String path : contentDispositionPathsPfx) {
+                        if (resourcePath.startsWith(path)) {
+                            if (contentTypesMapping.containsKey(path)) {
+                                Set <String> exceptions = contentTypesMapping.get(path);
+                                if (!exceptions.contains(type)) {
+                                    setContentDisposition(resource);
+                                    break;
+                                }
+                            } else {
+                                setContentDisposition(resource);
+                                break;
+                            }
 
+                        }
+                    }
                 }
             }
             super.setContentType(type);
         }    
         
-        private void setContentDisposition() {
-            this.addHeader(CONTENT_DISPOSTION, CONTENT_DISPOSTION_ATTACHMENT);
+      //---------- PRIVATE METHODS ---------
+        
+        private boolean setContentDisposition(Resource resource) {
+            boolean contentDispositionAdded = false;
+            if (!this.containsHeader(CONTENT_DISPOSTION) && this.isJcrData(resource)) {
+                this.addHeader(CONTENT_DISPOSTION, CONTENT_DISPOSTION_ATTACHMENT);
+                contentDispositionAdded = true;
+            }
+            return contentDispositionAdded;
+        }
+        
+        private boolean isJcrData(Resource resource){
+            boolean jcrData = false;
+            if (resource!= null) {
+                ValueMap props = resource.adaptTo(ValueMap.class);
+                if (props.containsKey(PROP_JCR_DATA) ) {
+                    jcrData = true;
+                } else {
+                    Resource jcrContent = resource.getChild(JCR_CONTENT_LEAF);
+                    if (jcrContent!= null) {
+                        props = jcrContent.adaptTo(ValueMap.class);
+                        if (props.containsKey(PROP_JCR_DATA) ) {
+                            jcrData = true;
+                        }
+                    }
+                }     
+            }
+            return jcrData;
         }
     }
 }

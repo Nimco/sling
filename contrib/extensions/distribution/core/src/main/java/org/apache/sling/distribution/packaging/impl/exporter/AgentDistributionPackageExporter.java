@@ -29,7 +29,10 @@ import org.apache.sling.distribution.DistributionRequest;
 import org.apache.sling.distribution.packaging.DistributionPackage;
 import org.apache.sling.distribution.packaging.DistributionPackageExportException;
 import org.apache.sling.distribution.packaging.DistributionPackageExporter;
+import org.apache.sling.distribution.packaging.DistributionPackageInfo;
+import org.apache.sling.distribution.packaging.impl.DistributionPackageUtils;
 import org.apache.sling.distribution.queue.DistributionQueue;
+import org.apache.sling.distribution.queue.DistributionQueueEntry;
 import org.apache.sling.distribution.queue.DistributionQueueItem;
 import org.apache.sling.distribution.serialization.DistributionPackageBuilder;
 import org.apache.sling.distribution.serialization.DistributionPackageBuilderProvider;
@@ -76,16 +79,20 @@ public class AgentDistributionPackageExporter implements DistributionPackageExpo
             log.debug("getting packages from queue {}", queueName);
 
             DistributionQueue queue = agent.getQueue(queueName);
-            DistributionQueueItem info = queue.getHead();
+            DistributionQueueEntry entry = queue.getHead();
             DistributionPackage distributionPackage;
-            if (info != null) {
+            if (entry != null) {
+                DistributionQueueItem queueItem = entry.getItem();
+                DistributionPackageInfo info = DistributionPackageUtils.fromQueueItem(queueItem);
                 DistributionPackageBuilder packageBuilder = packageBuilderProvider.getPackageBuilder(info.getType());
 
                 if (packageBuilder != null) {
-                    distributionPackage = packageBuilder.getPackage(resourceResolver, info.getId());
+                    distributionPackage = packageBuilder.getPackage(resourceResolver, queueItem.getId());
                     log.info("item {} fetched from the queue", info);
                     if (distributionPackage != null) {
                         result.add(new AgentDistributionPackage(distributionPackage, queue));
+                    } else {
+                        log.warn("cannot get package {}", info);
                     }
                 } else {
                     log.warn("cannot find package builder with type {}", info.getType());
@@ -106,13 +113,17 @@ public class AgentDistributionPackageExporter implements DistributionPackageExpo
             log.debug("getting package from queue {}", queueName);
 
             DistributionQueue queue = agent.getQueue(queueName);
-            DistributionQueueItem info = queue.getItem(distributionPackageId);
+            DistributionQueueEntry entry = queue.getHead();
             DistributionPackage distributionPackage;
-            if (info != null) {
+
+            if (entry != null) {
+                DistributionQueueItem queueItem = entry.getItem();
+                DistributionPackageInfo info = DistributionPackageUtils.fromQueueItem(queueItem);
+
                 DistributionPackageBuilder packageBuilder = packageBuilderProvider.getPackageBuilder(info.getType());
 
                 if (packageBuilder != null) {
-                    distributionPackage = packageBuilder.getPackage(resourceResolver, info.getId());
+                    distributionPackage = packageBuilder.getPackage(resourceResolver, queueItem.getId());
                     log.info("item {} fetched from the queue", info);
                     if (distributionPackage != null) {
                         return new AgentDistributionPackage(distributionPackage, queue);
@@ -145,8 +156,8 @@ public class AgentDistributionPackageExporter implements DistributionPackageExpo
         @Override
         public void delete() {
             String id = distributionPackage.getId();
-            DistributionQueueItem item = queue.remove(id);
-            super.delete();
+            queue.remove(id);
+            DistributionPackageUtils.releaseOrDelete(distributionPackage, queue.getName());
         }
     }
 }

@@ -107,6 +107,9 @@ public class JobQueueImpl
     /** A marker for doing a full cache search. */
     private final AtomicBoolean doFullCacheSearch = new AtomicBoolean(false);
 
+    /** A counter for rescheduling. */
+    private final AtomicInteger waitCounter = new AtomicInteger();
+
     /** The job cache. */
     private final QueueJobCache cache;
 
@@ -119,6 +122,7 @@ public class JobQueueImpl
     /** Lock for close/start. */
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
+    /** Sleeping until is only set for ordered queues if a job is rescheduled. */
     private volatile long isSleepingUntil = -1;
 
     /**
@@ -139,7 +143,7 @@ public class JobQueueImpl
         if ( cache.isEmpty() ) {
             return null;
         }
-        return new JobQueueImpl(name, config, services, topics, cache);
+        return new JobQueueImpl(name, config, services, cache);
     }
 
     /**
@@ -148,13 +152,11 @@ public class JobQueueImpl
      * @param name The queue name
      * @param config The queue configuration
      * @param services The queue services
-     * @param topics The topics handled by this queue
      * @param cache The job cache
      */
     private JobQueueImpl(final String name,
                         final InternalQueueConfiguration config,
                         final QueueServices services,
-                        final Set<String> topics,
                         final QueueJobCache cache) {
         if ( config.getOwnThreadPoolSize() > 0 ) {
             this.threadPool = new EventingThreadPool(services.threadPoolManager, config.getOwnThreadPoolSize());
@@ -198,15 +200,9 @@ public class JobQueueImpl
 
     /**
      * Start the job queue.
-     */
-    public void startJobs() {
-        startJobs(false);
-    }
-    /**
-     * Start the job queue.
      * This method might be called concurrently, therefore we use a guard
      */
-    private void startJobs(boolean justOne) {
+    public void startJobs() {
         if ( this.startJobsGuard.compareAndSet(false, true) ) {
             // we start as many jobs in parallel as possible
             while ( this.running && !this.isOutdated.get() && !this.isSuspended() && this.available.tryAcquire() ) {
@@ -245,12 +241,9 @@ public class JobQueueImpl
                                     currentThread.setName(oldName);
                                 }
                                 // and try to launch another job
-                                startJobs(true);
+                                startJobs();
                             }
                         });
-                        if ( justOne ) {
-                            break;
-                        }
                     } else {
                         // no job available, stop look
                         break;
@@ -276,7 +269,14 @@ public class JobQueueImpl
 
                 if ( handler.getConsumer() != null ) {
                     this.services.configuration.getAuditLogger().debug("START OK : {}", job.getId());
-                    final long queueTime = handler.started - job.getProperty(JobImpl.PROPERTY_JOB_QUEUED, Calendar.class).getTime().getTime();
+                    // sanity check for the queued property
+                    Calendar queued = job.getProperty(JobImpl.PROPERTY_JOB_QUEUED, Calendar.class);
+                    if ( queued == null ) {
+                        // we simply use a date of ten seconds ago
+                        queued = Calendar.getInstance();
+                        queued.setTimeInMillis(System.currentTimeMillis() - 10000);
+                    }
+                    final long queueTime = handler.started - queued.getTimeInMillis();
                     // update statistics
                     this.services.statisticsManager.jobStarted(this.queueName, job.getTopic(), queueTime);
                     // send notification
@@ -369,6 +369,24 @@ public class JobQueueImpl
                         if ( logger.isDebugEnabled() ) {
                             logger.debug("Received ack for job {}", Utility.toString(job));
                         }
+                        this.services.configuration.getAuditLogger().debug("START OK : {}", job.getId());
+                        // sanity check for the queued property
+                        Calendar queued = job.getProperty(JobImpl.PROPERTY_JOB_QUEUED, Calendar.class);
+                        if ( queued == null ) {
+                            // we simply use a date of ten seconds ago
+                            queued = Calendar.getInstance();
+                            queued.setTimeInMillis(System.currentTimeMillis() - 10000);
+                        }
+                        final long queueTime = handler.started - queued.getTimeInMillis();
+                        // update statistics
+                        this.services.statisticsManager.jobStarted(this.queueName, job.getTopic(), queueTime);
+                        // send notification
+                        NotificationUtility.sendNotification(this.services.eventAdmin, NotificationConstants.TOPIC_JOB_STARTED, job, queueTime);
+
+                        synchronized ( this.processingJobsLists ) {
+                            this.processingJobsLists.put(job.getId(), handler);
+                        }
+
                         // check for processor
                         final JobProcessor processor = notifier.getProcessor();
                         if ( processor != null ) {
@@ -452,6 +470,7 @@ public class JobQueueImpl
     private boolean canBeClosed() {
         return !this.isSuspended()
             && this.asyncCounter.get() == 0
+            && this.waitCounter.get() == 0
             && this.available.availablePermits() == this.configuration.getMaxParallel();
     }
 
@@ -496,7 +515,6 @@ public class JobQueueImpl
      */
     public void wakeUpQueue(final Set<String> topics) {
         this.cache.handleNewTopics(topics);
-        this.startJobs();
     }
 
     /**
@@ -528,8 +546,8 @@ public class JobQueueImpl
                 info.finalState = InternalJobState.SUCCEEDED;
                 break;
             case QUEUED : // check if we exceeded the number of retries
-                final int retries = (Integer) handler.getJob().getProperty(Job.PROPERTY_JOB_RETRIES);
-                int retryCount = (Integer)handler.getJob().getProperty(Job.PROPERTY_JOB_RETRY_COUNT);
+                final int retries = handler.getJob().getProperty(Job.PROPERTY_JOB_RETRIES, 0);
+                int retryCount = handler.getJob().getProperty(Job.PROPERTY_JOB_RETRY_COUNT, 0);
 
                 retryCount++;
                 if ( retries != -1 && retryCount > retries ) {
@@ -744,6 +762,7 @@ public class JobQueueImpl
         return "outdated=" + this.isOutdated.get() +
                 ", suspendedSince=" + this.suspendedSince.get() +
                 ", asyncJobs=" + this.asyncCounter.get() +
+                ", waitCount=" + this.waitCounter.get() +
                 ", jobCount=" + String.valueOf(this.configuration.getMaxParallel() - this.available.availablePermits() +
                 (this.configuration.getType() == Type.ORDERED ? ", isSleepingUntil=" + this.isSleepingUntil : ""));
     }
@@ -794,23 +813,33 @@ public class JobQueueImpl
             handler.addToRetryList();
             final Date fireDate = new Date();
             fireDate.setTime(System.currentTimeMillis() + delay);
-            this.isSleepingUntil = fireDate.getTime();
+            if ( this.configuration.getType() == Type.ORDERED ) {
+                this.isSleepingUntil = fireDate.getTime();
+            }
 
             final String jobName = "Waiting:" + queueName + ":" + handler.hashCode();
             final Runnable t = new Runnable() {
                 @Override
                 public void run() {
-                    isSleepingUntil = -1;
-                    if ( handler.removeFromRetryList() ) {
-                        requeue(handler);
+                    try {
+                        if ( handler.removeFromRetryList() ) {
+                            requeue(handler);
+                        }
+                        waitCounter.decrementAndGet();
+                    } finally {
+                        if ( configuration.getType() == Type.ORDERED ) {
+                            isSleepingUntil = -1;
+                            cache.setIsBlocked(false);
+                            startJobs();
+                        }
                     }
-                    if ( configuration.getType() == Type.ORDERED ) {
-                        cache.setIsBlocked(false);
-                    }
-                    startJobs();
                 }
             };
-            services.scheduler.schedule(t, services.scheduler.AT(fireDate).name(jobName));
+            this.waitCounter.incrementAndGet();
+            if ( !services.scheduler.schedule(t, services.scheduler.AT(fireDate).name(jobName)) ) {
+                // if scheduling fails run the thread directly
+                t.run();
+            }
         } else {
             // put directly into queue
             this.requeue(handler);

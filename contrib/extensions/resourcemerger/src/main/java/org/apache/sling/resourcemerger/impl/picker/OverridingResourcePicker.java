@@ -20,14 +20,15 @@ package org.apache.sling.resourcemerger.impl.picker;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.apache.felix.scr.annotations.Component;
 import org.apache.felix.scr.annotations.ConfigurationPolicy;
 import org.apache.felix.scr.annotations.Properties;
 import org.apache.felix.scr.annotations.Property;
 import org.apache.felix.scr.annotations.Service;
-import org.apache.sling.api.resource.NonExistingResource;
 import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.resourcemerger.impl.StubResource;
@@ -43,8 +44,8 @@ import org.apache.sling.resourcemerger.spi.MergedResourcePicker;
             label = "Root", description = "Root path at which merged resources will be available."),
     @Property(name=MergedResourcePicker.READ_ONLY, boolValue=true,
     label="Read Only",
-    description="Specifies if the resources are read-only or can be modified.")
-
+    description="Specifies if the resources are read-only or can be modified."),
+    @Property(name=MergedResourcePicker.TRAVERSE_PARENT, boolValue=true, propertyPrivate=true)
 })
 public class OverridingResourcePicker implements MergedResourcePicker {
 
@@ -53,6 +54,7 @@ public class OverridingResourcePicker implements MergedResourcePicker {
     public List<Resource> pickResources(ResourceResolver resolver, String relativePath) {
         String absPath = "/" + relativePath;
         final List<Resource> resources = new ArrayList<Resource>();
+        final Set<String> roots = new HashSet<String>();
 
         Resource currentTarget = resolver.getResource(absPath);
 
@@ -71,7 +73,9 @@ public class OverridingResourcePicker implements MergedResourcePicker {
                 final Resource inheritanceRootResource = info.resource;
                 final String pathRelativeToInheritanceRoot = info.getPathRelativeToInheritanceRoot();
                 final String superType = inheritanceRootResource.getResourceSuperType();
-                if (superType == null) {
+
+                if (superType == null
+                       || roots.contains(inheritanceRootResource.getPath())) { // avoid inheritance loops
                     currentTarget = null;
                 } else {
                     final String superTypeChildPath = superType + pathRelativeToInheritanceRoot;
@@ -82,6 +86,7 @@ public class OverridingResourcePicker implements MergedResourcePicker {
                         currentTarget = new StubResource(resolver, superTypeChildPath);
                     }
                     resources.add(currentTarget);
+                    roots.add(inheritanceRootResource.getPath());
                 }
             }
         }

@@ -24,6 +24,7 @@ import org.apache.sling.distribution.packaging.impl.DistributionPackageUtils;
 import org.apache.sling.distribution.queue.DistributionQueue;
 import org.apache.sling.distribution.queue.DistributionQueueException;
 import org.apache.sling.distribution.queue.DistributionQueueItem;
+import org.apache.sling.distribution.queue.DistributionQueueItemState;
 import org.apache.sling.distribution.queue.DistributionQueueItemStatus;
 import org.apache.sling.distribution.queue.DistributionQueueProvider;
 import org.slf4j.Logger;
@@ -33,6 +34,7 @@ import javax.annotation.Nonnull;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * The default strategy for delivering packages to queues. Each package can be dispatched to multiple queues.
@@ -58,18 +60,26 @@ public class MultipleQueueDispatchingStrategy implements DistributionQueueDispat
         DistributionQueueItem queueItem = getItem(distributionPackage);
         List<DistributionQueueItemStatus> result = new ArrayList<DistributionQueueItemStatus>();
 
-        for (String queueName: queueNames) {
-            DistributionQueue queue = queueProvider.getQueue(queueName);
-            DistributionPackageUtils.acquire(distributionPackage, queueName);
-            DistributionQueueItemStatus status = new DistributionQueueItemStatus(DistributionQueueItemStatus.ItemState.ERROR, queue.getName());
-            if (queue.add(queueItem)) {
-                 status = queue.getStatus(queueItem);
-            }
-            else {
-                DistributionPackageUtils.releaseOrDelete(distributionPackage, queueName);
-            }
+        // acquire the package temporarily until all queues are filled
+        String tempQueueName = "temp" + UUID.randomUUID();
+        DistributionPackageUtils.acquire(distributionPackage, tempQueueName);
 
-            result.add(status);
+        try {
+            for (String queueName: queueNames) {
+                DistributionQueue queue = queueProvider.getQueue(queueName);
+                DistributionQueueItemStatus status = new DistributionQueueItemStatus(DistributionQueueItemState.ERROR, queue.getName());
+
+                DistributionPackageUtils.acquire(distributionPackage, queueName);
+                if (queue.add(queueItem)) {
+                    status = queue.getItem(queueItem.getId()).getStatus();
+                } else {
+                    DistributionPackageUtils.releaseOrDelete(distributionPackage, queueName);
+                }
+
+                result.add(status);
+            }
+        } finally {
+            DistributionPackageUtils.releaseOrDelete(distributionPackage, tempQueueName);
         }
 
         return result;
@@ -84,9 +94,7 @@ public class MultipleQueueDispatchingStrategy implements DistributionQueueDispat
 
 
     private DistributionQueueItem getItem(DistributionPackage distributionPackage) {
-        DistributionQueueItem distributionQueueItem = new DistributionQueueItem(distributionPackage.getId(),
-                distributionPackage.getType(),
-                distributionPackage.getInfo());
+        DistributionQueueItem distributionQueueItem = DistributionPackageUtils.toQueueItem(distributionPackage);
 
         return distributionQueueItem;
     }

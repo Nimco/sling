@@ -23,10 +23,12 @@ import java.io.InputStream;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import org.apache.commons.io.IOUtils;
+import org.apache.http.Header;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpHost;
 import org.apache.http.HttpResponse;
@@ -38,9 +40,12 @@ import org.apache.http.conn.HttpHostConnectException;
 import org.apache.http.entity.ContentType;
 import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.distribution.DistributionRequest;
+import org.apache.sling.distribution.DistributionRequestType;
 import org.apache.sling.distribution.log.impl.DefaultDistributionLog;
 import org.apache.sling.distribution.packaging.DistributionPackage;
+import org.apache.sling.distribution.packaging.DistributionPackageInfo;
 import org.apache.sling.distribution.serialization.DistributionPackageBuilder;
+import org.apache.sling.distribution.servlet.ServletJsonUtils;
 import org.apache.sling.distribution.transport.DistributionTransportSecretProvider;
 import org.apache.sling.distribution.transport.core.DistributionTransport;
 import org.apache.sling.distribution.transport.core.DistributionTransportException;
@@ -60,18 +65,18 @@ public class SimpleHttpDistributionTransport implements DistributionTransport {
     private final DistributionEndpoint distributionEndpoint;
     private final DistributionPackageBuilder packageBuilder;
     protected final DistributionTransportSecretProvider secretProvider;
-    private final int maxNumberOfPackages;
+    private final int maxPullItems;
 
     public SimpleHttpDistributionTransport(DefaultDistributionLog log, DistributionEndpoint distributionEndpoint,
                                            DistributionPackageBuilder packageBuilder,
                                            DistributionTransportSecretProvider secretProvider,
-                                           int maxNumberOfPackages) {
+                                           int maxPullItems) {
         this.log = log;
 
         this.distributionEndpoint = distributionEndpoint;
         this.packageBuilder = packageBuilder;
         this.secretProvider = secretProvider;
-        this.maxNumberOfPackages = maxNumberOfPackages;
+        this.maxPullItems = maxPullItems;
     }
 
     public void deliverPackage(@Nonnull ResourceResolver resourceResolver, @Nonnull DistributionPackage distributionPackage) throws DistributionTransportException {
@@ -126,10 +131,11 @@ public class SimpleHttpDistributionTransport implements DistributionTransport {
     public List<DistributionPackage> retrievePackages(@Nonnull ResourceResolver resourceResolver, @Nonnull DistributionRequest
             distributionRequest) throws DistributionTransportException {
         log.debug("pulling from {}", distributionEndpoint.getUri());
+        List<DistributionPackage> result = new ArrayList<DistributionPackage>();
+
 
         try {
             URI distributionURI = RequestUtils.appendDistributionRequest(distributionEndpoint.getUri(), distributionRequest);
-            List<DistributionPackage> result = new ArrayList<DistributionPackage>();
 
             // TODO : executor should be cached and reused
 
@@ -143,50 +149,47 @@ public class SimpleHttpDistributionTransport implements DistributionTransport {
             // TODO : add queue parameter
 
             // continuously requests package streams as long as type header is received with the response (meaning there's a package of a certain type)
-            HttpResponse httpResponse;
-            try {
+            InputStream inputStream;
+            final Map<String, String> headers = new HashMap<String, String>();
 
-                int pulls = 0;
-                while (pulls < maxNumberOfPackages
-                        && (httpResponse = executor.execute(req).returnResponse()).getStatusLine().getStatusCode() == 200) {
-                    HttpEntity entity = httpResponse.getEntity();
-                    if (entity != null) {
-                        final DistributionPackage responsePackage = packageBuilder.readPackage(resourceResolver, entity.getContent());
-                        if (responsePackage != null) {
-                            responsePackage.getInfo().setOrigin(distributionURI);
-                            log.debug("pulled package no {} with info {}", pulls, responsePackage.getInfo());
+            int pulls = 0;
+            int maxNumberOfPackages = DistributionRequestType.PULL.equals(distributionRequest.getRequestType()) ? maxPullItems : 1;
 
-                            result.add(responsePackage);
-                        } else {
-                            log.warn("responsePackage is null");
-                        }
+            while (pulls < maxNumberOfPackages && (inputStream = HttpTransportUtils.fetchNextPackage(executor, distributionURI, headers)) != null) {
 
-                        pulls++;
-                    } else {
-                        log.info("no entity available");
-                        break;
-                    }
-                }
+                final DistributionPackage responsePackage = packageBuilder.readPackage(resourceResolver, inputStream);
+                if (responsePackage != null) {
+                    responsePackage.getInfo().put(DistributionPackageInfo.PROPERTY_ORIGIN_URI, distributionURI);
+                    log.debug("pulled package no {} with info {}", pulls, responsePackage.getInfo());
 
-                // only log.info when something is pulled in order to keep a quite log
-                if (pulls == 0) {
-                    log.debug("pulled {} packages from {}", pulls, distributionEndpoint.getUri());
+                    result.add(responsePackage);
+
+                    String originalId = headers.get(HttpTransportUtils.HEADER_DISTRIBUTION_ORIGINAL_ID);
+
+                    HttpTransportUtils.deletePackage(executor, distributionURI, originalId);
+
                 } else {
-                    log.info("pulled {} packages from {}", pulls, distributionEndpoint.getUri());
+                    log.warn("responsePackage is null");
                 }
 
-            } catch (HttpHostConnectException e) {
-                log.info("could not connect to {} - skipping", distributionEndpoint.getUri());
+                pulls++;
             }
 
-            return result;
-
+        } catch (HttpHostConnectException e) {
+            log.info("could not connect to {} - skipping", distributionEndpoint.getUri());
         } catch (Exception ex) {
             log.error("cannot retrieve packages", ex);
-
-            throw new DistributionTransportException(ex);
         }
 
+
+        // only log.info when something is pulled in order to keep a quite log
+        if (result.size() == 0) {
+            log.debug("pulled {} packages from {}", result.size(), distributionEndpoint.getUri());
+        } else {
+            log.info("pulled {} packages from {}", result.size(), distributionEndpoint.getUri());
+        }
+
+        return result;
     }
 
     protected Executor authenticate(DistributionTransportSecret secret, Executor executor) {

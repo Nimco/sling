@@ -34,6 +34,7 @@ import org.apache.sling.distribution.packaging.DistributionPackageExporter;
 import org.apache.sling.distribution.packaging.DistributionPackageImporter;
 import org.apache.sling.distribution.packaging.DistributionPackageInfo;
 import org.apache.sling.distribution.queue.DistributionQueue;
+import org.apache.sling.distribution.queue.DistributionQueueItemState;
 import org.apache.sling.distribution.queue.impl.DistributionQueueDispatchingStrategy;
 import org.apache.sling.distribution.queue.DistributionQueueItemStatus;
 import org.apache.sling.distribution.queue.DistributionQueueProvider;
@@ -46,7 +47,6 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyBoolean;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -63,7 +63,7 @@ public class SimpleDistributionAgentTest {
         DistributionRequestAuthorizationStrategy packageExporterStrategy = mock(DistributionRequestAuthorizationStrategy.class);
         DistributionQueueProvider queueProvider = mock(DistributionQueueProvider.class);
         DistributionQueueDispatchingStrategy distributionHandler = mock(DistributionQueueDispatchingStrategy.class);
-        Iterable<DistributionQueueItemStatus> states = Arrays.asList(new DistributionQueueItemStatus(DistributionQueueItemStatus.ItemState.ERROR, DistributionQueueDispatchingStrategy.DEFAULT_QUEUE_NAME));
+        Iterable<DistributionQueueItemStatus> states = Arrays.asList(new DistributionQueueItemStatus(DistributionQueueItemState.ERROR, DistributionQueueDispatchingStrategy.DEFAULT_QUEUE_NAME));
         when(distributionHandler.add(any(DistributionPackage.class), any(DistributionQueueProvider.class))).thenReturn(states);
         DistributionEventFactory distributionEventFactory = mock(DistributionEventFactory.class);
         ResourceResolverFactory resolverFactory = mock(ResourceResolverFactory.class);
@@ -77,7 +77,7 @@ public class SimpleDistributionAgentTest {
         DistributionPackage distributionPackage = mock(DistributionPackage.class);
         ResourceResolver resourceResolver = mock(ResourceResolver.class);
 
-        when(distributionPackage.getInfo()).thenReturn(new DistributionPackageInfo());
+        when(distributionPackage.getInfo()).thenReturn(new DistributionPackageInfo("type"));
         when(packageExporter.exportPackages(any(ResourceResolver.class), any(DistributionRequest.class)))
                 .thenReturn(Arrays.asList(distributionPackage));
         when(queueProvider.getQueue(DistributionQueueDispatchingStrategy.DEFAULT_QUEUE_NAME)).thenReturn(
@@ -107,8 +107,8 @@ public class SimpleDistributionAgentTest {
         DistributionPackage distributionPackage = mock(DistributionPackage.class);
         ResourceResolver resourceResolver = mock(ResourceResolver.class);
 
-        when(distributionPackage.getInfo()).thenReturn(new DistributionPackageInfo());
-        Iterable<DistributionQueueItemStatus> states = Arrays.asList(new DistributionQueueItemStatus(DistributionQueueItemStatus.ItemState.QUEUED,
+        when(distributionPackage.getInfo()).thenReturn(new DistributionPackageInfo("type"));
+        Iterable<DistributionQueueItemStatus> states = Arrays.asList(new DistributionQueueItemStatus(DistributionQueueItemState.QUEUED,
                 DistributionQueueDispatchingStrategy.DEFAULT_QUEUE_NAME));
         when(distributionHandler.add(any(DistributionPackage.class), any(DistributionQueueProvider.class))).thenReturn(states);
         when(packageExporter.exportPackages(any(ResourceResolver.class), any(DistributionRequest.class)))
@@ -139,7 +139,7 @@ public class SimpleDistributionAgentTest {
                 distributionEventFactory, resolverFactory, mock(DefaultDistributionLog.class), null, null);
         DistributionRequest request = new SimpleDistributionRequest(DistributionRequestType.ADD, "/");
         DistributionPackage distributionPackage = mock(DistributionPackage.class);
-        DistributionPackageInfo packageInfo = new DistributionPackageInfo();
+        DistributionPackageInfo packageInfo = new DistributionPackageInfo("type");
         when(distributionPackage.getInfo()).thenReturn(packageInfo);
         ResourceResolver resourceResolver = mock(ResourceResolver.class);
 
@@ -232,7 +232,7 @@ public class SimpleDistributionAgentTest {
 
 
         when(queueDistributionStrategy.add(any(DistributionPackage.class), any(DistributionQueueProvider.class))).thenReturn(Arrays.asList(
-              new DistributionQueueItemStatus(DistributionQueueItemStatus.ItemState.QUEUED, "default")
+              new DistributionQueueItemStatus(DistributionQueueItemState.QUEUED, "default")
         ));
 
         SimpleDistributionAgent agent = new SimpleDistributionAgent(name,
@@ -243,7 +243,7 @@ public class SimpleDistributionAgentTest {
 
         DistributionRequest request = new SimpleDistributionRequest(DistributionRequestType.ADD, "/content");
         DistributionPackage distributionPackage = mock(DistributionPackage.class);
-        DistributionPackageInfo packageInfo = new DistributionPackageInfo();
+        DistributionPackageInfo packageInfo = new DistributionPackageInfo("type");
         when(distributionPackage.getInfo()).thenReturn(packageInfo);
         ResourceResolver resourceResolver = mock(ResourceResolver.class);
 
@@ -271,7 +271,7 @@ public class SimpleDistributionAgentTest {
 
 
         when(queueDistributionStrategy.add(any(DistributionPackage.class), any(DistributionQueueProvider.class))).thenReturn(Arrays.asList(
-                new DistributionQueueItemStatus(DistributionQueueItemStatus.ItemState.QUEUED, "default")
+                new DistributionQueueItemStatus(DistributionQueueItemState.QUEUED, "default")
         ));
 
         SimpleDistributionAgent agent = new SimpleDistributionAgent(name,
@@ -282,7 +282,7 @@ public class SimpleDistributionAgentTest {
 
         DistributionRequest request = new SimpleDistributionRequest(DistributionRequestType.ADD, "/home");
         DistributionPackage distributionPackage = mock(DistributionPackage.class);
-        DistributionPackageInfo packageInfo = new DistributionPackageInfo();
+        DistributionPackageInfo packageInfo = new DistributionPackageInfo("type");
         when(distributionPackage.getInfo()).thenReturn(packageInfo);
         ResourceResolver resourceResolver = mock(ResourceResolver.class);
 

@@ -91,7 +91,7 @@ public class PreparePackageMojo extends AbstractSlingStartMojo {
 
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
-        final Model model = ProjectHelper.getEffectiveModel(this.project);
+        final Model model = ProjectHelper.getEffectiveModel(this.project, getResolverOptions());
 
         this.prepareGlobal(model);
         this.prepareStandaloneApp(model);
@@ -200,7 +200,8 @@ public class PreparePackageMojo extends AbstractSlingStartMojo {
     throws MojoExecutionException{
         for(final ArtifactGroup group : runMode.getArtifactGroups()) {
             for(final org.apache.sling.provisioning.model.Artifact a : group) {
-                final Artifact artifact = ModelUtils.getArtifact(this.project, this.mavenSession, this.artifactHandlerManager, this.resolver, a.getGroupId(), a.getArtifactId(), a.getVersion(), a.getType(), a.getClassifier());
+                final Artifact artifact = ModelUtils.getArtifact(this.project, this.mavenSession, this.artifactHandlerManager, this.resolver,
+                        a.getGroupId(), a.getArtifactId(), a.getVersion(), a.getType(), a.getClassifier());
                 final File artifactFile = artifact.getFile();
                 contentsMap.put(getPathForArtifact(group.getStartLevel(), artifactFile.getName(), runMode, isBoot), artifactFile);
             }
@@ -245,7 +246,7 @@ public class PreparePackageMojo extends AbstractSlingStartMojo {
             final RunMode launchpadRunMode = launchpadFeature.getRunMode(null);
             if ( launchpadRunMode != null ) {
                 for(final Map.Entry<String, String> entry : launchpadRunMode.getSettings()) {
-                    settings.put(entry.getKey(), entry.getValue());
+                    settings.put(entry.getKey(), deescapeVariablePlaceholders(entry.getValue()));
                 }
             }
         }
@@ -254,7 +255,7 @@ public class PreparePackageMojo extends AbstractSlingStartMojo {
             final RunMode bootRunMode = bootFeature.getRunMode(null);
             if ( bootRunMode != null ) {
                 for(final Map.Entry<String, String> entry : bootRunMode.getSettings()) {
-                    settings.put(entry.getKey(), entry.getValue());
+                    settings.put(entry.getKey(), deescapeVariablePlaceholders(entry.getValue()));
                 }
             }
         }
@@ -262,7 +263,7 @@ public class PreparePackageMojo extends AbstractSlingStartMojo {
             final RunMode packageRM = f.getRunMode(new String[] {packageRunMode});
             if ( packageRM != null ) {
                 for(final Map.Entry<String, String> entry : packageRM.getSettings()) {
-                    settings.put(entry.getKey(), entry.getValue());
+                    settings.put(entry.getKey(), deescapeVariablePlaceholders(entry.getValue()));
                 }
             }
         }
@@ -451,4 +452,17 @@ public class PreparePackageMojo extends AbstractSlingStartMojo {
                 mainName,
                 alias);
     }
+
+    /**
+     * Replace \${var} with ${var}
+     * @param text String with escaped variables
+     * @return String with deescaped variables
+     */
+    private String deescapeVariablePlaceholders(String text) {
+        if (text == null) {
+            return null;
+        }
+        return text.replaceAll("\\\\\\$", "\\$");
+    }
+
 }

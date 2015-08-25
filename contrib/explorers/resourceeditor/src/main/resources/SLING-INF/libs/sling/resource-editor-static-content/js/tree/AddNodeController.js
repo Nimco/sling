@@ -38,8 +38,8 @@ org.apache.sling.reseditor.AddNodeController = (function() {
 		this.showAllNodeTypes = false;
 		this.nodeTypeObjects = [];
 		this.nodeType="";
-		this.latestEnteredNodeName="";
-		this.latestEnteredResType="";
+		this.nodeNameSubmitable=false; // initially open
+		this.resourceTypeSubmitable=true;
 		
 		var thatAddNodeController = this;
 		$(document).ready(function() {
@@ -73,48 +73,51 @@ org.apache.sling.reseditor.AddNodeController = (function() {
 			})
 		});
 	};
-
+	
 	AddNodeController.prototype.addNode = function() {
 		var thatAddNodeController = this;
-		var nodeName = this.latestEnteredNodeName.trim();
-		var nodeType = $("#nodeType").val();
-		var resourceType = (this.latestEnteredResType != null && this.latestEnteredResType != "") ? this.latestEnteredResType.trim() : "";
-		
-		var data = {"_charset_": "utf-8"};
-		if ("" != nodeType){
-			data["jcr:primaryType"] = nodeType;
+		var dialogSubmitable = this.resourceTypeSubmitable && this.nodeNameSubmitable;
+		if (dialogSubmitable) {
+			var nodeName = $("#nodeName").select2("val");
+			var nodeType = $("#nodeType").select2("val");
+			var resourceType = $("#resourceType").select2("val");
+	
+			
+			var data = {"_charset_": "utf-8"};
+			if ("" != nodeType){
+				data["jcr:primaryType"] = nodeType;
+			}
+			var canAddResourceType = nodeType == "" ? true : this.mainController.ntManager.getNodeType(nodeType).canAddProperty("sling:resourceType", "String");
+			if ("" != resourceType && canAddResourceType){
+				data["sling:resourceType"] = resourceType;
+			}
+			var targetURL = (this.lastAddNodeURL=="/") ? "/" : this.lastAddNodeURL+"/";
+			targetURL = this.mainController.decodeFromHTML(targetURL);
+			if ("" != nodeName) {
+				targetURL += nodeName;
+			}
+			if (targetURL=="/"){
+				//adding a node without a specified name to the root node 
+				targetURL = "/*";
+			}
+			var encodedTargetURL = this.mainController.encodeURL(targetURL);
+	
+			$.ajax({
+		  	  type: 'POST',
+			  url: encodedTargetURL,
+			  dataType: "json",
+		  	  data: data
+		  	})
+			.done(function() {
+				$('#addNodeDialog').modal("hide");
+				var htmlDecodedLastAddNodeURL = thatAddNodeController.mainController.decodeFromHTML(thatAddNodeController.lastAddNodeURL);
+				thatAddNodeController.mainController.redirectTo(htmlDecodedLastAddNodeURL);
+			})
+			.fail(function(errorJson) {
+				$('#addNodeDialog').modal("hide");
+				thatAddNodeController.mainController.displayAlert(errorJson);
+			});
 		}
-		var canAddResourceType = nodeType == "" ? true : this.mainController.ntManager.getNodeType(nodeType).canAddProperty("sling:resourceType", "String");
-		if ("" != resourceType && canAddResourceType){
-			data["sling:resourceType"] = resourceType;
-		}
-		var targetURL = (this.lastAddNodeURL=="/") ? "/" : this.lastAddNodeURL+"/";
-		targetURL = this.mainController.decodeFromHTML(targetURL);
-		if ("" != nodeName) {
-			targetURL += nodeName;
-		}
-		if (targetURL=="/"){
-			//adding a node without a specified name to the root node 
-			targetURL = "/*";
-		}
-		var encodedTargetURL = this.mainController.encodeURL(targetURL);
-
-		$.ajax({
-	  	  type: 'POST',
-		  url: encodedTargetURL,
-		  dataType: "json",
-	  	  data: data
-	  	})
-		.done(function() {
-			$('#addNodeDialog').modal("hide");
-			var htmlDecodedLastAddNodeURL = thatAddNodeController.mainController.decodeFromHTML(thatAddNodeController.lastAddNodeURL);
-			thatAddNodeController.mainController.redirectTo(htmlDecodedLastAddNodeURL);
-		})
-		.fail(function(errorJson) {
-			$('#addNodeDialog').modal("hide");
-			thatAddNodeController.mainController.displayAlert(errorJson);
-		});
-		
 	}
 	
 	AddNodeController.prototype.toggleApplicableNodeTypes = function() {
@@ -198,6 +201,7 @@ org.apache.sling.reseditor.AddNodeController = (function() {
 			nodeHelpElement.show();
 		}
 		nodeNameListStar.sort();
+		nodeNameListStar.unshift("");
 		var nodeNameObjects = jQuery.map(nodeNameListStar, function( nt, i ) {
 			return {id: nt, text: nt};
 		});
@@ -206,19 +210,20 @@ org.apache.sling.reseditor.AddNodeController = (function() {
 			placeholder: "Enter or select a node name",
 			allowClear: true, 
 			selectOnBlur: true,
+			dropdownCssClass: "node_name_dd_container",
 			data: nodeNameObjects,
 			createSearchChoice: function(searchTerm){
+				thatAddNodeController.latestEnteredNodeName = searchTerm;
 				return {id:searchTerm, text:searchTerm};
 			}
 		});
-		$("#nodeName").on("select2-highlight", function(e) { 
-			/* In Select2 there is currently no way of getting
-			 * the highlighted (newly entered but not yet selected) text.
-			 * But there is this event. Thats why I use this one. 
-			 */ 
-			thatAddNodeController.latestEnteredNodeName=e.val;
-		})
-		
+		$("#nodeName").on("select2-open", function(e) {
+			thatAddNodeController.nodeNameSubmitable=false;
+		});
+		$("#nodeName").on("select2-close", function(e) {
+			thatAddNodeController.nodeNameSubmitable=true;
+		});
+
 		var nodeNameList = Object.keys(appliCnTypesByNodeName);
 		nodeNameList.sort();
 		thatAddNodeController.nodeTypeObjects = getNodeTypesByDependenyState.call(thatAddNodeController, nodeNameList, appliCnTypesByNodeName, thatAddNodeController.nodeTypeObjects);
@@ -243,13 +248,12 @@ org.apache.sling.reseditor.AddNodeController = (function() {
 		$("#nodeType").select2({
 			placeholder: "Select a node type",
 			allowClear: true,  
+			dropdownCssClass: "node_type_dd_container",
 			selectOnBlur: true,
 			data: function() { 
 			      return { results: thatAddNodeController.nodeTypeObjects } ; // Use the global variable to populate the list
 		    }
 		});
-		
-		$('#addNodeDialog').modal('show');
 		
 		var contextPath = this.mainController.getContextPath() == "/" && resourcePath.length>0 && resourcePath.charAt(0)=="/" ? "" : this.mainController.getContextPath(); 
 		this.lastAddNodeURL = contextPath+resourcePath;
@@ -258,28 +262,34 @@ org.apache.sling.reseditor.AddNodeController = (function() {
 		$('#resourceType').select2('data', null);
 		var contextPath = this.mainController.getContextPath();
 		contextPath = "/" === contextPath ? "" : contextPath;
-		var url = contextPath+"/libs/sling/resource-editor/servlet-nodes/resource-types.json";
+		var url = contextPath+"/libs/sling/resource-editor/content-nodes/resource-types.json";
 		$.getJSON(url, function( origData ) {
 			var data = jQuery.map( origData, function( n, i ) {
-				return ( {id:i, text:n} );
+				return ( {id:n, text:n} );
 			});
-			
+			data.unshift({id:"",text:""});
 			var select2 = $("#resourceType").select2({
 				placeholder: "Enter or select a resource type",
 				allowClear: true, 
+				dropdownCssClass: "resource_type_dd_container",
 				selectOnBlur: true,
 				data: data,
 				createSearchChoice: function(searchTerm){
+					thatAddNodeController.latestEnteredResType = searchTerm;
 					return {id:searchTerm, text:searchTerm};
 				}
 			}).data("select2");
-			$("#resourceType").on("select2-highlight", function(e) {
-				/* In Select2 there is currently no way of getting
-				 * the highlighted (newly entered but not yet selected) text.
-				 * But there is this event. Thats why I use this one. 
-				 */ 
-				thatAddNodeController.latestEnteredResType=e.val;
-			})
+
+			$("#resourceType").on("select2-open", function(e) {
+				thatAddNodeController.resourceTypeSubmitable=false;
+			});
+			$("#resourceType").on("select2-close", function(e) {
+				thatAddNodeController.resourceTypeSubmitable=true;
+			});
+			
+			$('#addNodeDialog').modal('show');
+			
+			$('#addNodeDialog').addClass('add-node-finished');
 		});
 	}
 	
