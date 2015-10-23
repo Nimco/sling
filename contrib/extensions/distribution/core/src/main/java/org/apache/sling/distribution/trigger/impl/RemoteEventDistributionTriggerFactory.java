@@ -18,6 +18,9 @@
  */
 package org.apache.sling.distribution.trigger.impl;
 
+import javax.annotation.Nonnull;
+import java.util.Map;
+
 import org.apache.felix.scr.annotations.Activate;
 import org.apache.felix.scr.annotations.Component;
 import org.apache.felix.scr.annotations.ConfigurationPolicy;
@@ -28,14 +31,11 @@ import org.apache.felix.scr.annotations.Service;
 import org.apache.sling.commons.osgi.PropertiesUtil;
 import org.apache.sling.commons.scheduler.Scheduler;
 import org.apache.sling.distribution.component.impl.DistributionComponentConstants;
+import org.apache.sling.distribution.DistributionException;
 import org.apache.sling.distribution.transport.DistributionTransportSecretProvider;
 import org.apache.sling.distribution.trigger.DistributionRequestHandler;
 import org.apache.sling.distribution.trigger.DistributionTrigger;
-import org.apache.sling.distribution.trigger.DistributionTriggerException;
 import org.osgi.framework.BundleContext;
-
-import javax.annotation.Nonnull;
-import java.util.Map;
 
 @Component(metatype = true,
         label = "Apache Sling Distribution Trigger - Remote Event Triggers Factory",
@@ -68,7 +68,6 @@ public class RemoteEventDistributionTriggerFactory implements DistributionTrigge
     RemoteEventDistributionTrigger trigger;
 
 
-
     @Activate
     public void activate(BundleContext bundleContext, Map<String, Object> config) {
         String endpoint = PropertiesUtil.toString(config.get(ENDPOINT), null);
@@ -81,11 +80,11 @@ public class RemoteEventDistributionTriggerFactory implements DistributionTrigge
 
     }
 
-    public void register(@Nonnull DistributionRequestHandler requestHandler) throws DistributionTriggerException {
+    public void register(@Nonnull DistributionRequestHandler requestHandler) throws DistributionException {
         trigger.register(requestHandler);
     }
 
-    public void unregister(@Nonnull DistributionRequestHandler requestHandler) throws DistributionTriggerException {
+    public void unregister(@Nonnull DistributionRequestHandler requestHandler) throws DistributionException {
         trigger.unregister(requestHandler);
     }
 }

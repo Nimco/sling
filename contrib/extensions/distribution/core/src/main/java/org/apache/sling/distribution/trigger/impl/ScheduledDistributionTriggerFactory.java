@@ -18,6 +18,9 @@
  */
 package org.apache.sling.distribution.trigger.impl;
 
+import javax.annotation.Nonnull;
+import java.util.Map;
+
 import org.apache.felix.scr.annotations.Activate;
 import org.apache.felix.scr.annotations.Component;
 import org.apache.felix.scr.annotations.ConfigurationPolicy;
@@ -29,14 +32,11 @@ import org.apache.sling.commons.osgi.PropertiesUtil;
 import org.apache.sling.commons.scheduler.Scheduler;
 import org.apache.sling.distribution.DistributionRequestType;
 import org.apache.sling.distribution.component.impl.DistributionComponentConstants;
+import org.apache.sling.distribution.DistributionException;
 import org.apache.sling.distribution.trigger.DistributionRequestHandler;
 import org.apache.sling.distribution.trigger.DistributionTrigger;
-import org.apache.sling.distribution.trigger.DistributionTriggerException;
 import org.apache.sling.jcr.api.SlingRepository;
 import org.osgi.framework.BundleContext;
-
-import javax.annotation.Nonnull;
-import java.util.Map;
 
 @Component(metatype = true,
         label = "Apache Sling Distribution Trigger - Scheduled Triggers Factory",
@@ -85,19 +85,19 @@ public class ScheduledDistributionTriggerFactory implements DistributionTrigger 
         String path = PropertiesUtil.toString(config.get(PATH), null);
         int interval = PropertiesUtil.toInteger(config.get(SECONDS), 30);
 
-        trigger =  new ScheduledDistributionTrigger(action, path, interval, scheduler);
+        trigger = new ScheduledDistributionTrigger(action, path, interval, scheduler);
     }
 
     @Deactivate
     public void deactivate() {
-       trigger.disable();
+        trigger.disable();
     }
 
-    public void register(@Nonnull DistributionRequestHandler requestHandler) throws DistributionTriggerException {
+    public void register(@Nonnull DistributionRequestHandler requestHandler) throws DistributionException {
         trigger.register(requestHandler);
     }
 
-    public void unregister(@Nonnull DistributionRequestHandler requestHandler) throws DistributionTriggerException {
+    public void unregister(@Nonnull DistributionRequestHandler requestHandler) throws DistributionException {
         trigger.unregister(requestHandler);
     }
 }

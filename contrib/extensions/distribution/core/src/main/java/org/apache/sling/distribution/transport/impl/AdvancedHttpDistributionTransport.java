@@ -33,14 +33,12 @@ import org.apache.http.client.fluent.Request;
 import org.apache.http.client.fluent.Response;
 import org.apache.http.entity.ContentType;
 import org.apache.sling.api.resource.ResourceResolver;
+import org.apache.sling.distribution.DistributionException;
 import org.apache.sling.distribution.log.impl.DefaultDistributionLog;
-import org.apache.sling.distribution.packaging.DistributionPackage;
+import org.apache.sling.distribution.serialization.DistributionPackage;
 import org.apache.sling.distribution.serialization.DistributionPackageBuilder;
-import org.apache.sling.distribution.transport.DistributionTransportSecretProvider;
-import org.apache.sling.distribution.transport.core.DistributionTransportException;
 import org.apache.sling.distribution.transport.DistributionTransportSecret;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.sling.distribution.transport.DistributionTransportSecretProvider;
 
 /**
  * Advanced HTTP {@link org.apache.sling.distribution.transport.core.DistributionTransport} supporting custom HTTP headers
@@ -81,10 +79,10 @@ public class AdvancedHttpDistributionTransport extends SimpleHttpDistributionTra
     }
 
     @Override
-    public void deliverPackage(@Nonnull ResourceResolver resourceResolver, @Nonnull DistributionPackage distributionPackage) throws DistributionTransportException {
+    public void deliverPackage(@Nonnull ResourceResolver resourceResolver, @Nonnull DistributionPackage distributionPackage) throws DistributionException {
         log.info("delivering package {} to {} using auth {}",
-                new Object[]{distributionPackage.getId(),
-                        distributionEndpoint.getUri(), secretProvider});
+                distributionPackage.getId(),
+                distributionEndpoint.getUri(), secretProvider);
 
         try {
             DistributionTransportSecret secret = secretProvider.getSecret(distributionEndpoint.getUri());
@@ -92,8 +90,8 @@ public class AdvancedHttpDistributionTransport extends SimpleHttpDistributionTra
 
             deliverPackage(executor, distributionPackage, distributionEndpoint);
 
-        } catch (Exception ex) {
-            throw new DistributionTransportException(ex);
+        } catch (IOException ex) {
+            throw new DistributionException(ex);
         }
 
     }
@@ -137,7 +135,7 @@ public class AdvancedHttpDistributionTransport extends SimpleHttpDistributionTra
     }
 
     private void deliverPackage(Executor executor, DistributionPackage distributionPackage,
-                                                       DistributionEndpoint distributionEndpoint) throws IOException {
+                                DistributionEndpoint distributionEndpoint) throws IOException {
         String type = distributionPackage.getType();
 
         Request req = Request.Post(distributionEndpoint.getUri()).useExpectContinue();

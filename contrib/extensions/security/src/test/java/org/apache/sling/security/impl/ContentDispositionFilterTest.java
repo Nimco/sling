@@ -51,6 +51,7 @@ public class ContentDispositionFilterTest {
         final ComponentContext ctx = context.mock(ComponentContext.class);
         final Dictionary props = new Hashtable<String, String[]>();
         props.put("sling.content.disposition.paths", new String []{"/content/usergenerated"});
+        props.put("sling.content.disposition.excluded.paths", new String []{""});
         
         context.checking(new Expectations() {
             {
@@ -74,6 +75,7 @@ public class ContentDispositionFilterTest {
         final ComponentContext ctx = context.mock(ComponentContext.class);
         final Dictionary props = new Hashtable<String, String[]>();
         props.put("sling.content.disposition.paths", new String []{"/content/usergenerated/*"});
+        props.put("sling.content.disposition.excluded.paths", new String []{""});
         
         context.checking(new Expectations() {
             {
@@ -97,6 +99,7 @@ public class ContentDispositionFilterTest {
         final ComponentContext ctx = context.mock(ComponentContext.class);
         final Dictionary props = new Hashtable<String, String[]>();
         props.put("sling.content.disposition.paths", new String []{"/libs", "/content/usergenerated/*"});
+        props.put("sling.content.disposition.excluded.paths", new String []{""});
         
         context.checking(new Expectations() {
             {
@@ -120,6 +123,7 @@ public class ContentDispositionFilterTest {
         final ComponentContext ctx = context.mock(ComponentContext.class);
         final Dictionary props = new Hashtable<String, String[]>();
         props.put("sling.content.disposition.paths", new String []{"*"});
+        props.put("sling.content.disposition.excluded.paths", new String []{""});
         
         context.checking(new Expectations() {
             {
@@ -143,6 +147,7 @@ public class ContentDispositionFilterTest {
         final ComponentContext ctx = context.mock(ComponentContext.class);
         final Dictionary props = new Hashtable<String, String[]>();
         props.put("sling.content.disposition.paths", new String []{"/libs:*"});
+        props.put("sling.content.disposition.excluded.paths", new String []{""});
         
         context.checking(new Expectations() {
             {
@@ -166,6 +171,7 @@ public class ContentDispositionFilterTest {
         final ComponentContext ctx = context.mock(ComponentContext.class);
         final Dictionary props = new Hashtable<String, String[]>();
         props.put("sling.content.disposition.paths", new String []{"/libs:text/html,text/plain","/content/usergenerated/*:image/jpeg"});
+        props.put("sling.content.disposition.excluded.paths", new String []{""});
         
         context.checking(new Expectations() {
             {
@@ -189,6 +195,46 @@ public class ContentDispositionFilterTest {
         Set<String> userGeneratedMapping = contentTypesMapping.get("/content/usergenerated/");
         Assert.assertEquals(1, userGeneratedMapping.size()); 
         userGeneratedMapping.contains("image/jpeg");
+     }
+    
+    @Test
+    public void test_activator8() throws Throwable{
+        contentDispositionFilter = new ContentDispositionFilter();
+        final ComponentContext ctx = context.mock(ComponentContext.class);
+        final Dictionary props = new Hashtable<String, String[]>();
+        props.put("sling.content.disposition.paths", new String []{"/libs:text/html,text/plain","/content/usergenerated/*:image/jpeg"});
+        props.put("sling.content.disposition.excluded.paths", new String []{});
+        
+        context.checking(new Expectations() {
+            {
+                allowing(ctx).getProperties();
+                will(returnValue(props));
+                
+            }
+        });    
+        PrivateAccessor.invoke(contentDispositionFilter,"activate",  new Class[]{ComponentContext.class},new Object[]{ctx});
+        Set<String> contentDispositionExcludedPaths = ( Set<String> ) PrivateAccessor.getField(contentDispositionFilter, "contentDispositionExcludedPaths");
+        Assert.assertEquals(0, contentDispositionExcludedPaths.size());   
+     }
+    
+    @Test
+    public void test_activator9() throws Throwable{
+        contentDispositionFilter = new ContentDispositionFilter();
+        final ComponentContext ctx = context.mock(ComponentContext.class);
+        final Dictionary props = new Hashtable<String, String[]>();
+        props.put("sling.content.disposition.paths", new String []{"/libs:text/html,text/plain","/content/usergenerated/*:image/jpeg"});
+        props.put("sling.content.disposition.excluded.paths", new String []{"/content", "/libs"});
+        
+        context.checking(new Expectations() {
+            {
+                allowing(ctx).getProperties();
+                will(returnValue(props));
+                
+            }
+        });    
+        PrivateAccessor.invoke(contentDispositionFilter,"activate",  new Class[]{ComponentContext.class},new Object[]{ctx});
+        Set<String> contentDispositionExcludedPaths = ( Set<String> ) PrivateAccessor.getField(contentDispositionFilter, "contentDispositionExcludedPaths");
+        Assert.assertEquals(2, contentDispositionExcludedPaths.size());   
      }
     
     @Test
@@ -220,6 +266,7 @@ public class ContentDispositionFilterTest {
         final ComponentContext ctx = context.mock(ComponentContext.class);
         final Dictionary props = new Hashtable<String, String[]>();
         props.put("sling.content.disposition.paths", new String []{"/content/usergenerated"});
+        props.put("sling.content.disposition.excluded.paths", new String []{""});
         
         context.checking(new Expectations() {
             {
@@ -233,6 +280,8 @@ public class ContentDispositionFilterTest {
         
         context.checking(new Expectations() {
             {
+                allowing(request).getMethod();
+                will(returnValue("GET"));
                 allowing(request).getAttribute(RewriterResponse.ATTRIBUTE_NAME);
                 will(returnValue(null));
                 allowing(request).setAttribute(RewriterResponse.ATTRIBUTE_NAME, "text/html");
@@ -259,6 +308,7 @@ public class ContentDispositionFilterTest {
         final ComponentContext ctx = context.mock(ComponentContext.class);
         final Dictionary props = new Hashtable<String, String[]>();
         props.put("sling.content.disposition.paths", new String []{"/content/usergenerated"});
+        props.put("sling.content.disposition.excluded.paths", new String []{""});
         
         context.checking(new Expectations() {
             {
@@ -272,6 +322,8 @@ public class ContentDispositionFilterTest {
         
         context.checking(new Expectations() {
             {
+                allowing(request).getMethod();
+                will(returnValue("GET"));
                 allowing(request).getAttribute(RewriterResponse.ATTRIBUTE_NAME);
                 will(returnValue(null));
                 allowing(request).setAttribute(RewriterResponse.ATTRIBUTE_NAME, "text/html");
@@ -298,6 +350,7 @@ public class ContentDispositionFilterTest {
         final ComponentContext ctx = context.mock(ComponentContext.class);
         final Dictionary props = new Hashtable<String, String[]>();
         props.put("sling.content.disposition.paths", new String []{"/content/usergenerated"});
+        props.put("sling.content.disposition.excluded.paths", new String []{""});
         
         context.checking(new Expectations() {
             {
@@ -317,6 +370,8 @@ public class ContentDispositionFilterTest {
         
         context.checking(new Expectations() {
             {
+                allowing(request).getMethod();
+                will(returnValue("GET"));
                 allowing(response).containsHeader("Content-Disposition");
                 will(returnValue(false));
                 allowing(request).getAttribute(RewriterResponse.ATTRIBUTE_NAME);
@@ -349,6 +404,7 @@ public class ContentDispositionFilterTest {
         final ComponentContext ctx = context.mock(ComponentContext.class);
         final Dictionary props = new Hashtable<String, String[]>();
         props.put("sling.content.disposition.paths", new String []{"/content/usergenerated/*"});
+        props.put("sling.content.disposition.excluded.paths", new String []{""});
         
         context.checking(new Expectations() {
             {
@@ -362,6 +418,8 @@ public class ContentDispositionFilterTest {
         
         context.checking(new Expectations() {
             {
+                allowing(request).getMethod();
+                will(returnValue("GET"));
                 allowing(request).getAttribute(RewriterResponse.ATTRIBUTE_NAME);
                 will(returnValue(null));
                 allowing(request).setAttribute(RewriterResponse.ATTRIBUTE_NAME, "text/html");
@@ -389,6 +447,7 @@ public class ContentDispositionFilterTest {
         final ComponentContext ctx = context.mock(ComponentContext.class);
         final Dictionary props = new Hashtable<String, String[]>();
         props.put("sling.content.disposition.paths", new String []{"/content/usergenerated/*"});
+        props.put("sling.content.disposition.excluded.paths", new String []{""});
         
         context.checking(new Expectations() {
             {
@@ -407,6 +466,8 @@ public class ContentDispositionFilterTest {
         
         context.checking(new Expectations() {
             {
+                allowing(request).getMethod();
+                will(returnValue("GET"));
                 allowing(response).containsHeader("Content-Disposition");
                 will(returnValue(false));
                 allowing(request).getAttribute(RewriterResponse.ATTRIBUTE_NAME);
@@ -440,6 +501,7 @@ public class ContentDispositionFilterTest {
         final ComponentContext ctx = context.mock(ComponentContext.class);
         final Dictionary props = new Hashtable<String, String[]>();
         props.put("sling.content.disposition.paths", new String []{"/content/usergenerated/*"});
+        props.put("sling.content.disposition.excluded.paths", new String []{""});
         
         context.checking(new Expectations() {
             {
@@ -458,6 +520,8 @@ public class ContentDispositionFilterTest {
         
         context.checking(new Expectations() {
             {
+                allowing(request).getMethod();
+                will(returnValue("GET"));
                 allowing(response).containsHeader("Content-Disposition");
                 will(returnValue(false));
                 allowing(request).getAttribute(RewriterResponse.ATTRIBUTE_NAME);
@@ -490,6 +554,7 @@ public class ContentDispositionFilterTest {
         final ComponentContext ctx = context.mock(ComponentContext.class);
         final Dictionary props = new Hashtable<String, String[]>();
         props.put("sling.content.disposition.paths", new String []{"/content/usergenerated:text/html,text/plain"});
+        props.put("sling.content.disposition.excluded.paths", new String []{""});
         
         context.checking(new Expectations() {
             {
@@ -503,6 +568,8 @@ public class ContentDispositionFilterTest {
         
         context.checking(new Expectations() {
             {
+                allowing(request).getMethod();
+                will(returnValue("GET"));
                 allowing(request).getAttribute(RewriterResponse.ATTRIBUTE_NAME);
                 will(returnValue(null));
                 allowing(request).setAttribute(RewriterResponse.ATTRIBUTE_NAME, "text/html");
@@ -529,6 +596,7 @@ public class ContentDispositionFilterTest {
         final ComponentContext ctx = context.mock(ComponentContext.class);
         final Dictionary props = new Hashtable<String, String[]>();
         props.put("sling.content.disposition.paths", new String []{"/content/usergenerated:text/html,text/plain"});
+        props.put("sling.content.disposition.excluded.paths", new String []{""});
         
         context.checking(new Expectations() {
             {
@@ -542,6 +610,8 @@ public class ContentDispositionFilterTest {
         
         context.checking(new Expectations() {
             {
+                allowing(request).getMethod();
+                will(returnValue("GET"));
                 allowing(request).getAttribute(RewriterResponse.ATTRIBUTE_NAME);
                 will(returnValue(null));
                 allowing(request).setAttribute(RewriterResponse.ATTRIBUTE_NAME, "text/html");
@@ -567,6 +637,7 @@ public class ContentDispositionFilterTest {
         final ComponentContext ctx = context.mock(ComponentContext.class);
         final Dictionary props = new Hashtable<String, String[]>();
         props.put("sling.content.disposition.paths", new String []{"/content/usergenerated:text/html,text/plain"});
+        props.put("sling.content.disposition.excluded.paths", new String []{""});
         
         context.checking(new Expectations() {
             {
@@ -580,6 +651,8 @@ public class ContentDispositionFilterTest {
         
         context.checking(new Expectations() {
             {
+                allowing(request).getMethod();
+                will(returnValue("GET"));
                 allowing(request).getAttribute(RewriterResponse.ATTRIBUTE_NAME);
                 will(returnValue(null));
                 allowing(request).setAttribute(RewriterResponse.ATTRIBUTE_NAME, "text/html");
@@ -606,6 +679,7 @@ public class ContentDispositionFilterTest {
         final ComponentContext ctx = context.mock(ComponentContext.class);
         final Dictionary props = new Hashtable<String, String[]>();
         props.put("sling.content.disposition.paths", new String []{"/content/usergenerated:text/html,text/plain"});
+        props.put("sling.content.disposition.excluded.paths", new String []{""});
         
         context.checking(new Expectations() {
             {
@@ -624,6 +698,8 @@ public class ContentDispositionFilterTest {
         
         context.checking(new Expectations() {
             {
+                allowing(request).getMethod();
+                will(returnValue("GET"));
                 allowing(response).containsHeader("Content-Disposition");
                 will(returnValue(false));
                 allowing(request).getAttribute(RewriterResponse.ATTRIBUTE_NAME);
@@ -656,6 +732,7 @@ public class ContentDispositionFilterTest {
         final ComponentContext ctx = context.mock(ComponentContext.class);
         final Dictionary props = new Hashtable<String, String[]>();
         props.put("sling.content.disposition.paths", new String []{"/content/usergenerated/*:text/html,text/plain"});
+        props.put("sling.content.disposition.excluded.paths", new String []{""});
         
         context.checking(new Expectations() {
             {
@@ -669,6 +746,8 @@ public class ContentDispositionFilterTest {
         
         context.checking(new Expectations() {
             {
+                allowing(request).getMethod();
+                will(returnValue("GET"));
                 allowing(request).getAttribute(RewriterResponse.ATTRIBUTE_NAME);
                 will(returnValue(null));
                 allowing(request).setAttribute(RewriterResponse.ATTRIBUTE_NAME, "text/html");
@@ -695,6 +774,7 @@ public class ContentDispositionFilterTest {
         final ComponentContext ctx = context.mock(ComponentContext.class);
         final Dictionary props = new Hashtable<String, String[]>();
         props.put("sling.content.disposition.paths", new String []{"/content/usergenerated/*:text/html,text/plain"});
+        props.put("sling.content.disposition.excluded.paths", new String []{""});
         
         context.checking(new Expectations() {
             {
@@ -708,6 +788,8 @@ public class ContentDispositionFilterTest {
         
         context.checking(new Expectations() {
             {
+                allowing(request).getMethod();
+                will(returnValue("GET"));
                 allowing(request).getAttribute(RewriterResponse.ATTRIBUTE_NAME);
                 will(returnValue(null));
                 allowing(request).setAttribute(RewriterResponse.ATTRIBUTE_NAME, "text/html");
@@ -733,6 +815,7 @@ public class ContentDispositionFilterTest {
         final ComponentContext ctx = context.mock(ComponentContext.class);
         final Dictionary props = new Hashtable<String, String[]>();
         props.put("sling.content.disposition.paths", new String []{"/content/usergenerated/*:text/html,text/plain"});
+        props.put("sling.content.disposition.excluded.paths", new String []{""});
         
         context.checking(new Expectations() {
             {
@@ -746,6 +829,8 @@ public class ContentDispositionFilterTest {
         
         context.checking(new Expectations() {
             {
+                allowing(request).getMethod();
+                will(returnValue("GET"));
                 allowing(request).getAttribute(RewriterResponse.ATTRIBUTE_NAME);
                 will(returnValue(null));
                 allowing(request).setAttribute(RewriterResponse.ATTRIBUTE_NAME, "text/html");
@@ -772,6 +857,7 @@ public class ContentDispositionFilterTest {
         final ComponentContext ctx = context.mock(ComponentContext.class);
         final Dictionary props = new Hashtable<String, String[]>();
         props.put("sling.content.disposition.paths", new String []{"/content/usergenerated/*:text/html,text/plain"});
+        props.put("sling.content.disposition.excluded.paths", new String []{""});
         
         context.checking(new Expectations() {
             {
@@ -791,6 +877,8 @@ public class ContentDispositionFilterTest {
         
         context.checking(new Expectations() {
             {
+                allowing(request).getMethod();
+                will(returnValue("GET"));
                 allowing(response).containsHeader("Content-Disposition");
                 will(returnValue(false));
                 allowing(request).getAttribute(RewriterResponse.ATTRIBUTE_NAME);
@@ -828,6 +916,7 @@ public class ContentDispositionFilterTest {
         final ComponentContext ctx = context.mock(ComponentContext.class);
         final Dictionary props = new Hashtable<String, String[]>();
         props.put("sling.content.disposition.paths", new String []{"/content/usergenerated"});
+        props.put("sling.content.disposition.excluded.paths", new String []{""});
         
         context.checking(new Expectations() {
             {
@@ -846,6 +935,8 @@ public class ContentDispositionFilterTest {
         
         context.checking(new Expectations() {
             {
+                allowing(request).getMethod();
+                will(returnValue("GET"));
                 allowing(response).containsHeader("Content-Disposition");
                 will(returnValue(false));
                 exactly(1).of(request).getAttribute(RewriterResponse.ATTRIBUTE_NAME);
@@ -886,6 +977,7 @@ public class ContentDispositionFilterTest {
         final ComponentContext ctx = context.mock(ComponentContext.class);
         final Dictionary props = new Hashtable<String, String[]>();
         props.put("sling.content.disposition.paths", new String []{"/content/usergenerated"});
+        props.put("sling.content.disposition.excluded.paths", new String []{""});
         
         context.checking(new Expectations() {
             {
@@ -905,6 +997,8 @@ public class ContentDispositionFilterTest {
         
         context.checking(new Expectations() {
             {
+                allowing(request).getMethod();
+                will(returnValue("GET"));
                 exactly(1).of(response).containsHeader("Content-Disposition");
                 will(returnValue(false));
                 exactly(1).of(response).containsHeader("Content-Disposition");
@@ -946,6 +1040,7 @@ public class ContentDispositionFilterTest {
         final ComponentContext ctx = context.mock(ComponentContext.class);
         final Dictionary props = new Hashtable<String, String[]>();
         props.put("sling.content.disposition.paths", new String []{"/content/usergenerated"});
+        props.put("sling.content.disposition.excluded.paths", new String []{""});
         props.put("sling.content.disposition.all.paths", false);
         
         context.checking(new Expectations() {
@@ -966,6 +1061,8 @@ public class ContentDispositionFilterTest {
         
         context.checking(new Expectations() {
             {
+                allowing(request).getMethod();
+                will(returnValue("GET"));
                 exactly(1).of(response).containsHeader("Content-Disposition");
                 will(returnValue(false));
                 exactly(1).of(response).containsHeader("Content-Disposition");
@@ -1006,6 +1103,7 @@ public class ContentDispositionFilterTest {
         final ComponentContext ctx = context.mock(ComponentContext.class);
         final Dictionary props = new Hashtable<String, String[]>();
         props.put("sling.content.disposition.paths", new String []{"/content/usergenerated"});
+        props.put("sling.content.disposition.excluded.paths", new String []{""});
         props.put("sling.content.disposition.all.paths", true);
         
         context.checking(new Expectations() {
@@ -1026,6 +1124,8 @@ public class ContentDispositionFilterTest {
         
         context.checking(new Expectations() {
             {
+                allowing(request).getMethod();
+                will(returnValue("GET"));
                 exactly(1).of(response).containsHeader("Content-Disposition");
                 will(returnValue(false));
                 exactly(1).of(response).containsHeader("Content-Disposition");
@@ -1052,6 +1152,240 @@ public class ContentDispositionFilterTest {
         });       
         rewriterResponse.setContentType("text/html");
         Assert.assertEquals(1, counter.intValue());
+    }
+    
+    @Test
+    public void test_doFilter19() throws Throwable{       
+        final SlingHttpServletRequest request = context.mock(SlingHttpServletRequest.class);
+        final SlingHttpServletResponse response = context.mock(SlingHttpServletResponse.class);
+        final Resource resource = context.mock(Resource.class, "resource" );   
+        final ValueMap properties = context.mock(ValueMap.class);
+        contentDispositionFilter = new ContentDispositionFilter();
+        
+        final ComponentContext ctx = context.mock(ComponentContext.class);
+        final Dictionary props = new Hashtable<String, String[]>();
+        props.put("sling.content.disposition.paths", new String []{"/content/usergenerated"});
+        props.put("sling.content.disposition.excluded.paths", new String []{"/content"});
+        props.put("sling.content.disposition.all.paths", true);
+        
+        context.checking(new Expectations() {
+            {
+                allowing(ctx).getProperties();
+                will(returnValue(props));
+                
+            }
+        });    
+        PrivateAccessor.invoke(contentDispositionFilter,"activate",  new Class[]{ComponentContext.class},new Object[]{ctx});
+        final AtomicInteger counter =  new AtomicInteger();        
+        final ContentDispositionFilter.RewriterResponse rewriterResponse = contentDispositionFilter. new RewriterResponse(request, response) {          
+            public void addHeader(String name, String value) {
+                counter.incrementAndGet();
+            }
+        };
+
+        
+        context.checking(new Expectations() {
+            {
+                allowing(request).getMethod();
+                will(returnValue("GET"));
+                exactly(1).of(response).containsHeader("Content-Disposition");
+                will(returnValue(false));
+                exactly(1).of(response).containsHeader("Content-Disposition");
+                will(returnValue(true));
+                exactly(1).of(request).getAttribute(RewriterResponse.ATTRIBUTE_NAME);
+                will(returnValue(null));
+                exactly(1).of(request).getAttribute(RewriterResponse.ATTRIBUTE_NAME);
+                will(returnValue("text/html"));
+                allowing(request).setAttribute(RewriterResponse.ATTRIBUTE_NAME, "text/xml");
+                allowing(request).setAttribute(RewriterResponse.ATTRIBUTE_NAME, "text/html");
+                allowing(request).getResource();
+                will(returnValue(resource));
+                allowing(resource).getPath();
+                will(returnValue("/content/other"));
+                allowing(resource).adaptTo(ValueMap.class);
+                will(returnValue(properties));
+                allowing(properties).containsKey(PROP_JCR_DATA);
+                will(returnValue(true));
+                allowing(response).setContentType("text/html");
+                allowing(response).setContentType("text/xml");
+                //CONTENT DISPOSITION IS SET
+                exactly(1).of(response).addHeader("Content-Disposition", "attachment");
+            }
+        });       
+        rewriterResponse.setContentType("text/html");
+        Assert.assertEquals(1, counter.intValue());
+    }
+    
+    @Test
+    public void test_doFilter20() throws Throwable{       
+        final SlingHttpServletRequest request = context.mock(SlingHttpServletRequest.class);
+        final SlingHttpServletResponse response = context.mock(SlingHttpServletResponse.class);
+        final Resource resource = context.mock(Resource.class, "resource" );   
+        final ValueMap properties = context.mock(ValueMap.class);
+        contentDispositionFilter = new ContentDispositionFilter();
+        
+        final ComponentContext ctx = context.mock(ComponentContext.class);
+        final Dictionary props = new Hashtable<String, String[]>();
+        props.put("sling.content.disposition.paths", new String []{"/content/usergenerated"});
+        props.put("sling.content.disposition.excluded.paths", new String []{"/content/other"});
+        props.put("sling.content.disposition.all.paths", true);
+        
+        context.checking(new Expectations() {
+            {
+                allowing(ctx).getProperties();
+                will(returnValue(props));
+                
+            }
+        });    
+        PrivateAccessor.invoke(contentDispositionFilter,"activate",  new Class[]{ComponentContext.class},new Object[]{ctx});
+        final AtomicInteger counter =  new AtomicInteger();        
+        final ContentDispositionFilter.RewriterResponse rewriterResponse = contentDispositionFilter. new RewriterResponse(request, response) {          
+            public void addHeader(String name, String value) {
+                counter.incrementAndGet();
+            }
+        };
+
+        
+        context.checking(new Expectations() {
+            {
+                allowing(request).getMethod();
+                will(returnValue("GET"));
+                exactly(1).of(response).containsHeader("Content-Disposition");
+                will(returnValue(false));
+                exactly(1).of(response).containsHeader("Content-Disposition");
+                will(returnValue(true));
+                exactly(1).of(request).getAttribute(RewriterResponse.ATTRIBUTE_NAME);
+                will(returnValue(null));
+                exactly(1).of(request).getAttribute(RewriterResponse.ATTRIBUTE_NAME);
+                will(returnValue("text/html"));
+                allowing(request).setAttribute(RewriterResponse.ATTRIBUTE_NAME, "text/xml");
+                allowing(request).setAttribute(RewriterResponse.ATTRIBUTE_NAME, "text/html");
+                allowing(request).getResource();
+                will(returnValue(resource));
+                allowing(resource).getPath();
+                will(returnValue("/content/other"));
+                allowing(resource).adaptTo(ValueMap.class);
+                will(returnValue(properties));
+                allowing(properties).containsKey(PROP_JCR_DATA);
+                will(returnValue(true));
+                allowing(response).setContentType("text/html");
+                allowing(response).setContentType("text/xml");
+                //CONTENT DISPOSITION IS NOT SET
+                never(response).addHeader("Content-Disposition", "attachment");
+            }
+        });       
+        rewriterResponse.setContentType("text/html");
+        Assert.assertEquals(0, counter.intValue());
+    }
+    
+    @Test
+    public void test_doFilter21() throws Throwable{       
+        final SlingHttpServletRequest request = context.mock(SlingHttpServletRequest.class);
+        final SlingHttpServletResponse response = context.mock(SlingHttpServletResponse.class);
+        final Resource resource = context.mock(Resource.class, "resource" );   
+        final ValueMap properties = context.mock(ValueMap.class);
+        contentDispositionFilter = new ContentDispositionFilter();
+        
+        final ComponentContext ctx = context.mock(ComponentContext.class);
+        final Dictionary props = new Hashtable<String, String[]>();
+        props.put("sling.content.disposition.paths", new String []{"/content/usergenerated"});
+        props.put("sling.content.disposition.excluded.paths", new String []{"/content"});
+        
+        context.checking(new Expectations() {
+            {
+                allowing(ctx).getProperties();
+                will(returnValue(props));
+                
+            }
+        });    
+        PrivateAccessor.invoke(contentDispositionFilter,"activate",  new Class[]{ComponentContext.class},new Object[]{ctx});
+        
+        final AtomicInteger counter =  new AtomicInteger();        
+        final ContentDispositionFilter.RewriterResponse rewriterResponse = contentDispositionFilter. new RewriterResponse(request, response) {          
+            public void addHeader(String name, String value) {
+                counter.incrementAndGet();
+            }            
+        };
+        
+        context.checking(new Expectations() {
+            {
+                allowing(request).getMethod();
+                will(returnValue("GET"));
+                allowing(response).containsHeader("Content-Disposition");
+                will(returnValue(false));
+                allowing(request).getAttribute(RewriterResponse.ATTRIBUTE_NAME);
+                will(returnValue(null));
+                allowing(request).setAttribute(RewriterResponse.ATTRIBUTE_NAME, "text/html");
+                allowing(request).getResource();
+                will(returnValue(resource));
+                allowing(resource).getPath();
+                will(returnValue("/content/usergenerated"));
+                allowing(resource).adaptTo(ValueMap.class);
+                will(returnValue(properties));
+                allowing(properties).containsKey(PROP_JCR_DATA);
+                will(returnValue(true));
+                allowing(response).setContentType("text/html");
+                //CONTENT DISPOSITION IS SET
+                exactly(1).of(response).addHeader("Content-Disposition", "attachment");
+            }
+        });       
+        rewriterResponse.setContentType("text/html");        
+        Assert.assertEquals(1, counter.intValue());
+    }
+    
+    @Test
+    public void test_doFilter22() throws Throwable{       
+        final SlingHttpServletRequest request = context.mock(SlingHttpServletRequest.class);
+        final SlingHttpServletResponse response = context.mock(SlingHttpServletResponse.class);
+        final Resource resource = context.mock(Resource.class, "resource" );   
+        final ValueMap properties = context.mock(ValueMap.class);
+        contentDispositionFilter = new ContentDispositionFilter();
+        
+        final ComponentContext ctx = context.mock(ComponentContext.class);
+        final Dictionary props = new Hashtable<String, String[]>();
+        props.put("sling.content.disposition.paths", new String []{"/content/usergenerated"});
+        props.put("sling.content.disposition.excluded.paths", new String []{"/content/usergenerated"});
+        
+        context.checking(new Expectations() {
+            {
+                allowing(ctx).getProperties();
+                will(returnValue(props));
+                
+            }
+        });    
+        PrivateAccessor.invoke(contentDispositionFilter,"activate",  new Class[]{ComponentContext.class},new Object[]{ctx});
+        
+        final AtomicInteger counter =  new AtomicInteger();        
+        final ContentDispositionFilter.RewriterResponse rewriterResponse = contentDispositionFilter. new RewriterResponse(request, response) {          
+            public void addHeader(String name, String value) {
+                counter.incrementAndGet();
+            }            
+        };
+        
+        context.checking(new Expectations() {
+            {
+                allowing(request).getMethod();
+                will(returnValue("GET"));
+                allowing(response).containsHeader("Content-Disposition");
+                will(returnValue(false));
+                allowing(request).getAttribute(RewriterResponse.ATTRIBUTE_NAME);
+                will(returnValue(null));
+                allowing(request).setAttribute(RewriterResponse.ATTRIBUTE_NAME, "text/html");
+                allowing(request).getResource();
+                will(returnValue(resource));
+                allowing(resource).getPath();
+                will(returnValue("/content/usergenerated"));
+                allowing(resource).adaptTo(ValueMap.class);
+                will(returnValue(properties));
+                allowing(properties).containsKey(PROP_JCR_DATA);
+                will(returnValue(true));
+                allowing(response).setContentType("text/html");
+                //CONTENT DISPOSITION IS NOT SET
+                never(response).addHeader("Content-Disposition", "attachment");
+            }
+        });       
+        rewriterResponse.setContentType("text/html");        
+        Assert.assertEquals(0, counter.intValue());
     }
     
     @Test
@@ -1183,5 +1517,62 @@ public class ContentDispositionFilterTest {
         Boolean result = (Boolean) PrivateAccessor.invoke(rewriterResponse,"isJcrData",  new Class[]{Resource.class},new Object[]{resource});
         
         Assert.assertTrue(result);
+    }
+    
+    @Test
+    public void test_isJcrData6() throws Throwable {
+        contentDispositionFilter = new ContentDispositionFilter();
+        final SlingHttpServletRequest request = context.mock(SlingHttpServletRequest.class);
+        final SlingHttpServletResponse response = context.mock(SlingHttpServletResponse.class);       
+        final ContentDispositionFilter.RewriterResponse rewriterResponse = contentDispositionFilter. new RewriterResponse(request, response);
+        
+        
+        final Resource resource = context.mock(Resource.class);
+        final ValueMap properties = context.mock(ValueMap.class);
+        
+        context.checking(new Expectations() {
+            {
+                allowing(resource).adaptTo(ValueMap.class);
+                will(returnValue(null));
+                allowing(resource).getChild(JCR_CONTENT_LEAF);
+                will(returnValue(null));
+            }
+        });     
+        
+        Boolean result = (Boolean) PrivateAccessor.invoke(rewriterResponse,"isJcrData",  new Class[]{Resource.class},new Object[]{resource});
+        
+        Assert.assertFalse(result);
+    }
+    
+    
+    @Test
+    public void test_isJcrData7() throws Throwable {
+        contentDispositionFilter = new ContentDispositionFilter();
+        final SlingHttpServletRequest request = context.mock(SlingHttpServletRequest.class);
+        final SlingHttpServletResponse response = context.mock(SlingHttpServletResponse.class);       
+        final ContentDispositionFilter.RewriterResponse rewriterResponse = contentDispositionFilter. new RewriterResponse(request, response);
+        
+        final Resource child = context.mock(Resource.class, "child");
+        final Resource resource = context.mock(Resource.class, "resource" );
+        final ValueMap properties = context.mock(ValueMap.class);
+        final ValueMap childPropoerties = context.mock(ValueMap.class, "childPropoerties");
+
+        
+        context.checking(new Expectations() {
+            {
+                allowing(resource).adaptTo(ValueMap.class);
+                will(returnValue(properties));
+                allowing(properties).containsKey(PROP_JCR_DATA);
+                will(returnValue(false));
+                allowing(resource).getChild(JCR_CONTENT_LEAF);
+                will(returnValue(child));
+                allowing(child).adaptTo(ValueMap.class);
+                will(returnValue(null));
+            }
+        });     
+        
+        Boolean result = (Boolean) PrivateAccessor.invoke(rewriterResponse,"isJcrData",  new Class[]{Resource.class},new Object[]{resource});
+        
+        Assert.assertFalse(result);
     }
 }

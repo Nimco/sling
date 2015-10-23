@@ -52,14 +52,14 @@ import org.apache.sling.discovery.InstanceDescription;
 import org.apache.sling.discovery.InstanceFilter;
 import org.apache.sling.discovery.TopologyEvent;
 import org.apache.sling.discovery.TopologyEvent.Type;
+import org.apache.sling.discovery.base.commons.ClusterViewService;
+import org.apache.sling.discovery.base.connectors.announcement.Announcement;
+import org.apache.sling.discovery.base.connectors.announcement.AnnouncementRegistry;
+import org.apache.sling.discovery.base.connectors.announcement.CachedAnnouncement;
+import org.apache.sling.discovery.base.connectors.ping.ConnectorRegistry;
+import org.apache.sling.discovery.base.connectors.ping.TopologyConnectorClientInformation;
 import org.apache.sling.discovery.TopologyEventListener;
 import org.apache.sling.discovery.TopologyView;
-import org.apache.sling.discovery.impl.cluster.ClusterViewService;
-import org.apache.sling.discovery.impl.topology.announcement.Announcement;
-import org.apache.sling.discovery.impl.topology.announcement.AnnouncementRegistry;
-import org.apache.sling.discovery.impl.topology.announcement.CachedAnnouncement;
-import org.apache.sling.discovery.impl.topology.connector.ConnectorRegistry;
-import org.apache.sling.discovery.impl.topology.connector.TopologyConnectorClientInformation;
 import org.osgi.framework.BundleContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -75,6 +75,7 @@ import org.slf4j.LoggerFactory;
             value="Apache Sling Web Console Plugin to display Background servlets and ExecutionEngine status"),
     @Property(name=WebConsoleConstants.PLUGIN_LABEL, value=TopologyWebConsolePlugin.LABEL),
     @Property(name=WebConsoleConstants.PLUGIN_TITLE, value=TopologyWebConsolePlugin.TITLE),
+    @Property(name="felix.webconsole.category", value="Sling"),
     @Property(name="felix.webconsole.configprinter.modes", value={"zip"})
 })
 @SuppressWarnings("serial")
@@ -215,7 +216,7 @@ public class TopologyWebConsolePlugin extends AbstractWebConsolePlugin implement
         pw.println("<br/>");
         final String changing;
         if (!topology.isCurrent()) {
-        	changing = " <b><i>changing</i></b>";
+        	changing = " <b><i>CHANGING!</i> (the view is no longer current!)</b>";
         } else {
         	changing = "";
         }
@@ -239,7 +240,7 @@ public class TopologyWebConsolePlugin extends AbstractWebConsolePlugin implement
         Set<ClusterView> clusters = topology.getClusterViews();
         ClusterView myCluster = topology.getLocalInstance().getClusterView();
         boolean odd = true;
-        renderCluster(pw, myCluster, myCluster, odd);
+        renderCluster(pw, myCluster, myCluster, odd, topology.isCurrent());
 
         for (Iterator<ClusterView> it = clusters.iterator(); it.hasNext();) {
             ClusterView clusterView = it.next();
@@ -248,7 +249,7 @@ public class TopologyWebConsolePlugin extends AbstractWebConsolePlugin implement
                 continue;
             }
             odd = !odd;
-            renderCluster(pw, clusterView, myCluster, odd);
+            renderCluster(pw, clusterView, myCluster, odd, topology.isCurrent());
         }
 
         pw.println("</tbody>");
@@ -284,13 +285,13 @@ public class TopologyWebConsolePlugin extends AbstractWebConsolePlugin implement
     /**
      * Render a particular cluster (into table rows)
      */
-    private void renderCluster(final PrintWriter pw, final ClusterView renderCluster, final ClusterView localCluster, final boolean odd) {
+    private void renderCluster(final PrintWriter pw, final ClusterView renderCluster, final ClusterView localCluster, final boolean odd, final boolean current) {
         final Collection<Announcement> announcements = announcementRegistry.listAnnouncementsInSameCluster(localCluster);
 
         for (Iterator<InstanceDescription> it = renderCluster.getInstances()
                 .iterator(); it.hasNext();) {
             final InstanceDescription instanceDescription = it.next();
-            final boolean inLocalCluster = clusterViewService.contains(instanceDescription.getSlingId());
+            final boolean inLocalCluster = renderCluster == localCluster;
             Announcement parentAnnouncement = null;
             for (Iterator<Announcement> it2 = announcements.iterator(); it2
                     .hasNext();) {
@@ -308,7 +309,7 @@ public class TopologyWebConsolePlugin extends AbstractWebConsolePlugin implement
 
             final String oddEven = odd ? "odd" : "even";
 
-            if (inLocalCluster || (parentAnnouncement!=null)) {
+            if (current && (inLocalCluster || (parentAnnouncement!=null))) {
                 pw.println("<tr class=\"" + oddEven + " ui-state-default\">");
             } else {
                 pw.println("<tr class=\"" + oddEven + " ui-state-error\">");
@@ -430,8 +431,8 @@ public class TopologyWebConsolePlugin extends AbstractWebConsolePlugin implement
                 pw.println("<td><b>not connected</b></td>");
                 pw.println("<td"+tooltip+"><b>not ok (HTTP Status-Code: "+statusCode+", "+statusDetails+")</b></td>");
             }
-            pw.println("<td>"+beautifiedTimeDiff(topologyConnectorClient.getLastHeartbeatSent())+"</td>");
-            pw.println("<td>"+beautifiedDueTime(topologyConnectorClient.getNextHeartbeatDue())+"</td>");
+            pw.println("<td>"+beautifiedTimeDiff(topologyConnectorClient.getLastPingSent())+"</td>");
+            pw.println("<td>"+beautifiedDueTime(topologyConnectorClient.getNextPingDue())+"</td>");
             pw.println("<td>"+topologyConnectorClient.getLastRequestEncoding()+"</td>");
             pw.println("<td>"+topologyConnectorClient.getLastResponseEncoding()+"</td>");
             // //TODO fallback urls are not yet implemented!
@@ -525,7 +526,7 @@ public class TopologyWebConsolePlugin extends AbstractWebConsolePlugin implement
             } else {
                 pw.println("<td><i>n/a</i></td>");
             }
-            pw.println("<td>"+beautifiedTimeDiff(incomingCachedAnnouncement.getLastHeartbeat())+"</td>");
+            pw.println("<td>"+beautifiedTimeDiff(incomingCachedAnnouncement.getLastPing())+"</td>");
             pw.println("<td>"+beautifiedDueTime(incomingCachedAnnouncement.getSecondsUntilTimeout())+"</td>");
 
             pw.println("</tr>");
@@ -748,7 +749,7 @@ public class TopologyWebConsolePlugin extends AbstractWebConsolePlugin implement
         }
         pw.print("Topology");
         if (!topology.isCurrent()) {
-            pw.print(" changing!");
+            pw.print(" CHANGING! (the view is no longer current!)");
         }
         pw.println();
         pw.println();
@@ -784,7 +785,7 @@ public class TopologyWebConsolePlugin extends AbstractWebConsolePlugin implement
                     pw.print(incomingAnnouncement.getServerInfo());
                     pw.println();
                 }
-                pw.println("Last heartbeat received : "+beautifiedTimeDiff(incomingCachedAnnouncement.getLastHeartbeat()));
+                pw.println("Last heartbeat received : "+beautifiedTimeDiff(incomingCachedAnnouncement.getLastPing()));
                 pw.println("Timeout : "+beautifiedDueTime(incomingCachedAnnouncement.getSecondsUntilTimeout()));
 
                 pw.println();
@@ -845,8 +846,8 @@ public class TopologyWebConsolePlugin extends AbstractWebConsolePlugin implement
                     }
                     pw.print(" (HTTP StatusCode: "+statusCode+", "+statusDetails+")");
                     pw.println();
-                    pw.println("Last heartbeat sent : "+beautifiedTimeDiff(topologyConnectorClient.getLastHeartbeatSent()));
-                    pw.println("Next heartbeat due : "+beautifiedDueTime(topologyConnectorClient.getNextHeartbeatDue()));
+                    pw.println("Last heartbeat sent : "+beautifiedTimeDiff(topologyConnectorClient.getLastPingSent()));
+                    pw.println("Next heartbeat due : "+beautifiedDueTime(topologyConnectorClient.getNextPingDue()));
                 }
                 pw.println();
             }
@@ -881,7 +882,7 @@ public class TopologyWebConsolePlugin extends AbstractWebConsolePlugin implement
         final Collection<Announcement> announcements = announcementRegistry.listAnnouncementsInSameCluster(localCluster);
 
         for(final InstanceDescription instanceDescription : renderCluster.getInstances() ) {
-            final boolean inLocalCluster = clusterViewService.contains(instanceDescription.getSlingId());
+            final boolean inLocalCluster = renderCluster == localCluster;
             Announcement parentAnnouncement = null;
             for (Iterator<Announcement> it2 = announcements.iterator(); it2
                     .hasNext();) {

@@ -31,14 +31,14 @@ import org.apache.felix.scr.annotations.Reference;
 import org.apache.felix.scr.annotations.Service;
 import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.commons.osgi.PropertiesUtil;
-import org.apache.sling.distribution.component.impl.DistributionComponentKind;
 import org.apache.sling.distribution.component.impl.DistributionComponentConstants;
+import org.apache.sling.distribution.component.impl.DistributionComponentKind;
 import org.apache.sling.distribution.component.impl.SettingsUtils;
+import org.apache.sling.distribution.DistributionException;
 import org.apache.sling.distribution.log.impl.DefaultDistributionLog;
-import org.apache.sling.distribution.packaging.DistributionPackage;
-import org.apache.sling.distribution.packaging.DistributionPackageImportException;
+import org.apache.sling.distribution.serialization.DistributionPackage;
 import org.apache.sling.distribution.packaging.DistributionPackageImporter;
-import org.apache.sling.distribution.packaging.DistributionPackageInfo;
+import org.apache.sling.distribution.serialization.DistributionPackageInfo;
 import org.apache.sling.distribution.transport.DistributionTransportSecretProvider;
 import org.apache.sling.distribution.transport.impl.TransportEndpointStrategyType;
 import org.slf4j.Logger;
@@ -107,15 +107,16 @@ public class RemoteDistributionPackageImporterFactory implements DistributionPac
         DefaultDistributionLog distributionLog = new DefaultDistributionLog(DistributionComponentKind.IMPORTER, importerName, RemoteDistributionPackageImporter.class, DefaultDistributionLog.LogLevel.ERROR);
 
 
-        importer =  new RemoteDistributionPackageImporter(distributionLog, transportSecretProvider, endpoints, transportEndpointStrategyType);
+        importer = new RemoteDistributionPackageImporter(distributionLog, transportSecretProvider, endpoints, transportEndpointStrategyType);
 
     }
 
-    public void importPackage(@Nonnull ResourceResolver resourceResolver, @Nonnull DistributionPackage distributionPackage) throws DistributionPackageImportException {
+    public void importPackage(@Nonnull ResourceResolver resourceResolver, @Nonnull DistributionPackage distributionPackage) throws DistributionException {
         importer.importPackage(resourceResolver, distributionPackage);
     }
 
-    public DistributionPackageInfo importStream(@Nonnull ResourceResolver resourceResolver, @Nonnull InputStream stream) throws DistributionPackageImportException {
+    @Nonnull
+    public DistributionPackageInfo importStream(@Nonnull ResourceResolver resourceResolver, @Nonnull InputStream stream) throws DistributionException {
         return importer.importStream(resourceResolver, stream);
     }
 }

@@ -19,26 +19,43 @@
 
 package org.apache.sling.distribution.packaging.impl;
 
-
-import org.apache.sling.distribution.packaging.DistributionPackage;
-import org.apache.sling.distribution.packaging.DistributionPackageInfo;
+import org.apache.sling.distribution.queue.DistributionQueueEntry;
+import org.apache.sling.distribution.queue.DistributionQueueStatus;
+import org.apache.sling.distribution.serialization.DistributionPackage;
+import org.apache.sling.distribution.serialization.DistributionPackageInfo;
 import org.apache.sling.distribution.packaging.SharedDistributionPackage;
 import org.apache.sling.distribution.queue.DistributionQueueItem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * Package related utility methods
+ */
 public class DistributionPackageUtils {
 
     static Logger log = LoggerFactory.getLogger(DistributionPackageUtils.class);
 
+    /**
+     * distribution package origin queue
+     */
+    public static String PACKAGE_INFO_PROPERTY_ORIGIN_QUEUE = "internal.origin.queue";
 
+    /**
+     * Acquires the package if it's a {@link SharedDistributionPackage}, via {@link SharedDistributionPackage#acquire(String)}
+     * @param distributionPackage a distribution package
+     * @param queueName the name of the queue in which the package should be acquired
+     */
     public static void acquire(DistributionPackage distributionPackage, String queueName) {
         if (distributionPackage instanceof SharedDistributionPackage) {
             ((SharedDistributionPackage) distributionPackage).acquire(queueName);
         }
     }
 
-
+    /**
+     * Releases a distribution package if it's a {@link SharedDistributionPackage}, otherwise deletes it.
+     * @param distributionPackage a distribution package
+     * @param queueName the name of the queue from which it should be eventually released
+     */
     public static void releaseOrDelete(DistributionPackage distributionPackage, String queueName) {
         if (distributionPackage instanceof SharedDistributionPackage) {
             if (queueName != null) {
@@ -53,25 +70,46 @@ public class DistributionPackageUtils {
         }
     }
 
+    /**
+     * Delete a distribution package, if deletion fails, ignore it
+     * @param distributionPackage the package to delete
+     */
     public static void deleteSafely(DistributionPackage distributionPackage) {
-        if (distributionPackage == null) {
-            return;
-        }
-        try {
-            distributionPackage.delete();
-        } catch (Throwable t) {
-            log.error("error deleting package", t);
+        if (distributionPackage != null) {
+            try {
+                distributionPackage.delete();
+            } catch (Throwable t) {
+                log.error("error deleting package", t);
+            }
         }
     }
 
+    /**
+     * Create a queue item out of a package
+     * @param distributionPackage a distribution package
+     * @return a distribution queue item
+     */
     public static DistributionQueueItem toQueueItem(DistributionPackage distributionPackage) {
         return new DistributionQueueItem(distributionPackage.getId(), distributionPackage.getInfo());
     }
 
-
+    /**
+     * Create a {@link DistributionPackageInfo} from a queue item
+     * @param queueItem a distribution queue item
+     * @return a {@link DistributionPackageInfo}
+     */
     public static DistributionPackageInfo fromQueueItem(DistributionQueueItem queueItem) {
-        return new DistributionPackageInfo(queueItem);
+        String type = queueItem.get(DistributionPackageInfo.PROPERTY_PACKAGE_TYPE, String.class);
+        return new DistributionPackageInfo(type, queueItem);
     }
 
+    public static String getQueueName(DistributionPackageInfo packageInfo) {
+        return packageInfo.get(PACKAGE_INFO_PROPERTY_ORIGIN_QUEUE, String.class);
+    }
+
+    public static void mergeQueueEntry(DistributionPackageInfo packageInfo, DistributionQueueEntry entry) {
+        packageInfo.putAll(entry.getItem());
+        packageInfo.put(PACKAGE_INFO_PROPERTY_ORIGIN_QUEUE, entry.getStatus().getQueueName());
+    }
 
 }

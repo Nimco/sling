@@ -24,19 +24,17 @@ import java.util.List;
 
 import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.distribution.DistributionRequest;
+import org.apache.sling.distribution.DistributionException;
 import org.apache.sling.distribution.log.impl.DefaultDistributionLog;
-import org.apache.sling.distribution.packaging.DistributionPackage;
-import org.apache.sling.distribution.packaging.DistributionPackageExportException;
+import org.apache.sling.distribution.serialization.DistributionPackage;
 import org.apache.sling.distribution.packaging.DistributionPackageExporter;
 import org.apache.sling.distribution.serialization.DistributionPackageBuilder;
-import org.apache.sling.distribution.transport.core.DistributionTransport;
 import org.apache.sling.distribution.transport.DistributionTransportSecretProvider;
+import org.apache.sling.distribution.transport.core.DistributionTransport;
 import org.apache.sling.distribution.transport.impl.DistributionEndpoint;
 import org.apache.sling.distribution.transport.impl.MultipleEndpointDistributionTransport;
 import org.apache.sling.distribution.transport.impl.SimpleHttpDistributionTransport;
 import org.apache.sling.distribution.transport.impl.TransportEndpointStrategyType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Default implementation of {@link org.apache.sling.distribution.packaging.DistributionPackageExporter}
@@ -80,20 +78,15 @@ public class RemoteDistributionPackageExporter implements DistributionPackageExp
     }
 
     @Nonnull
-    public List<DistributionPackage> exportPackages(@Nonnull ResourceResolver resourceResolver, @Nonnull DistributionRequest distributionRequest) throws DistributionPackageExportException {
-        try {
-            List<DistributionPackage> packages = new ArrayList<DistributionPackage>();
-            for (DistributionPackage distributionPackage : transportHandler.retrievePackages(resourceResolver, distributionRequest)) {
-                packages.add(distributionPackage);
-            }
-            return packages;
-        } catch (Exception e) {
-            log.error("cannot export packages", e);
-            throw new DistributionPackageExportException(e);
+    public List<DistributionPackage> exportPackages(@Nonnull ResourceResolver resourceResolver, @Nonnull DistributionRequest distributionRequest) throws DistributionException {
+        List<DistributionPackage> packages = new ArrayList<DistributionPackage>();
+        for (DistributionPackage distributionPackage : transportHandler.retrievePackages(resourceResolver, distributionRequest)) {
+            packages.add(distributionPackage);
         }
+        return packages;
     }
 
-    public DistributionPackage getPackage(@Nonnull ResourceResolver resourceResolver, @Nonnull String distributionPackageId) {
+    public DistributionPackage getPackage(@Nonnull ResourceResolver resourceResolver, @Nonnull String distributionPackageId) throws DistributionException {
         return packageBuilder.getPackage(resourceResolver, distributionPackageId);
     }
 }

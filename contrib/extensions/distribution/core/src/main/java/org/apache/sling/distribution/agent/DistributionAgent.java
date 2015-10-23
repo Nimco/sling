@@ -25,9 +25,9 @@ import aQute.bnd.annotation.ProviderType;
 import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.distribution.DistributionRequest;
 import org.apache.sling.distribution.DistributionResponse;
+import org.apache.sling.distribution.DistributionException;
 import org.apache.sling.distribution.log.DistributionLog;
 import org.apache.sling.distribution.queue.DistributionQueue;
-import org.apache.sling.distribution.queue.DistributionQueueState;
 
 /**
  * A distribution agent is responsible for handling {@link org.apache.sling.distribution.DistributionRequest}s.
@@ -53,10 +53,9 @@ public interface DistributionAgent {
      * @param name a queue name
      * @return a {@link org.apache.sling.distribution.queue.DistributionQueue} with the given name bound to this agent, if it exists,
      * {@code null} otherwise
-     * @throws DistributionAgentException if an error occurs in retrieving the queue
      */
     @CheckForNull
-    DistributionQueue getQueue(@Nonnull String name) throws DistributionAgentException;
+    DistributionQueue getQueue(@Nonnull String name);
 
 
     /**
@@ -87,9 +86,9 @@ public interface DistributionAgent {
      * @param distributionRequest the distribution request
      * @param resourceResolver    the resource resolver used for authorizing the request,
      * @return a {@link org.apache.sling.distribution.DistributionResponse}
-     * @throws DistributionAgentException if any error happens during the execution of the request or if the authentication fails
+     * @throws DistributionException if any error happens during the execution of the request or if the authentication fails
      */
     @Nonnull
-    DistributionResponse execute(@Nonnull ResourceResolver resourceResolver, @Nonnull DistributionRequest distributionRequest) throws DistributionAgentException;
+    DistributionResponse execute(@Nonnull ResourceResolver resourceResolver, @Nonnull DistributionRequest distributionRequest) throws DistributionException;
 
 }

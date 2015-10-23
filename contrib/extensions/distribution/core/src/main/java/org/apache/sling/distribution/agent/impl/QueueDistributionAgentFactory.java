@@ -18,6 +18,10 @@
  */
 package org.apache.sling.distribution.agent.impl;
 
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+
 import org.apache.felix.scr.annotations.Activate;
 import org.apache.felix.scr.annotations.Component;
 import org.apache.felix.scr.annotations.ConfigurationPolicy;
@@ -37,8 +41,10 @@ import org.apache.sling.distribution.event.impl.DistributionEventFactory;
 import org.apache.sling.distribution.log.impl.DefaultDistributionLog;
 import org.apache.sling.distribution.packaging.DistributionPackageExporter;
 import org.apache.sling.distribution.packaging.impl.exporter.LocalDistributionPackageExporter;
-import org.apache.sling.distribution.queue.impl.DistributionQueueDispatchingStrategy;
 import org.apache.sling.distribution.queue.DistributionQueueProvider;
+import org.apache.sling.distribution.queue.impl.DistributionQueueDispatchingStrategy;
+import org.apache.sling.distribution.queue.impl.MultipleQueueDispatchingStrategy;
+import org.apache.sling.distribution.queue.impl.SelectiveQueueDispatchingStrategy;
 import org.apache.sling.distribution.queue.impl.SingleQueueDispatchingStrategy;
 import org.apache.sling.distribution.queue.impl.jobhandling.JobHandlingDistributionQueueProvider;
 import org.apache.sling.distribution.serialization.DistributionPackageBuilder;
@@ -48,8 +54,6 @@ import org.apache.sling.settings.SlingSettingsService;
 import org.osgi.framework.BundleContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.Map;
 
 /**
  * An OSGi service factory for {@link org.apache.sling.distribution.agent.DistributionAgent}s which references already existing OSGi services.
@@ -85,13 +89,12 @@ public class QueueDistributionAgentFactory extends AbstractDistributionAgentFact
     public static final String SERVICE_NAME = "serviceName";
 
     @Property(options = {
-            @PropertyOption(name = "debug", value = "debug"), @PropertyOption(name = "info", value = "info"),  @PropertyOption(name = "warn", value = "warn"),
+            @PropertyOption(name = "debug", value = "debug"), @PropertyOption(name = "info", value = "info"), @PropertyOption(name = "warn", value = "warn"),
             @PropertyOption(name = "error", value = "error")},
             value = "info",
             label = "Log Level", description = "The log level recorded in the transient log accessible via http."
     )
     public static final String LOG_LEVEL = AbstractDistributionAgentFactory.LOG_LEVEL;
-
 
 
     @Property(cardinality = 100, label = "Allowed roots", description = "If set the agent will allow only distribution requests under the specified roots.")
@@ -112,6 +115,11 @@ public class QueueDistributionAgentFactory extends AbstractDistributionAgentFact
     @Property(value = DEFAULT_TRIGGER_TARGET, label = "Triggers", description = "The target reference for DistributionTrigger used to trigger distribution, " +
             "e.g. use target=(name=...) to bind to services by name.")
     public static final String TRIGGERS_TARGET = "triggers.target";
+
+    @Property(cardinality = 100, label = "Selective queues", description = "List of selective queues that should used for specific paths." +
+            "The selector format is  {queuePrefix}|{mainQueueMatcher}={pathMatcher}, e.g. french|publish.*=/content/fr.*")
+    public static final String SELECTIVE_QUEUES = "selectiveQueues";
+
 
     @Reference
     private Packaging packaging;
@@ -154,14 +162,26 @@ public class QueueDistributionAgentFactory extends AbstractDistributionAgentFact
         String[] allowedRoots = PropertiesUtil.toStringArray(config.get(ALLOWED_ROOTS), null);
         allowedRoots = SettingsUtils.removeEmptyEntries(allowedRoots);
 
-        DistributionQueueProvider queueProvider =  new JobHandlingDistributionQueueProvider(agentName, jobManager, context);
-        DistributionQueueDispatchingStrategy dispatchingStrategy = new SingleQueueDispatchingStrategy();
-        DistributionPackageExporter packageExporter = new LocalDistributionPackageExporter(packageBuilder);
-        DistributionRequestType[] allowedRequests = new DistributionRequestType[] { DistributionRequestType.ADD, DistributionRequestType.DELETE };
 
+        Map<String, String> selectiveQueues = PropertiesUtil.toMap(config.get(SELECTIVE_QUEUES), new String[0]);
+        selectiveQueues = SettingsUtils.removeEmptyEntries(selectiveQueues);
+
+
+        DistributionQueueProvider queueProvider = new JobHandlingDistributionQueueProvider(agentName, jobManager, context);
+        DistributionQueueDispatchingStrategy exportQueueStrategy = null;
+
+
+        if (selectiveQueues != null) {
+            exportQueueStrategy = new SelectiveQueueDispatchingStrategy(selectiveQueues, new String[] { DistributionQueueDispatchingStrategy.DEFAULT_QUEUE_NAME });
+        } else {
+            exportQueueStrategy = new SingleQueueDispatchingStrategy();
+        }
+
+        DistributionPackageExporter packageExporter = new LocalDistributionPackageExporter(packageBuilder);
+        DistributionRequestType[] allowedRequests = new DistributionRequestType[]{DistributionRequestType.ADD, DistributionRequestType.DELETE};
 
         return new SimpleDistributionAgent(agentName, false, null,
                 serviceName, null, packageExporter, requestAuthorizationStrategy,
-                queueProvider, dispatchingStrategy, distributionEventFactory, resourceResolverFactory, distributionLog, allowedRequests, allowedRoots);
+                queueProvider, exportQueueStrategy, null, distributionEventFactory, resourceResolverFactory, distributionLog, allowedRequests, allowedRoots, 0);
     }
 }

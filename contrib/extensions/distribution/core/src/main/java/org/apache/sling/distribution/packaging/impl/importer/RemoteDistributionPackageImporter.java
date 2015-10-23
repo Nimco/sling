@@ -24,19 +24,17 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.sling.api.resource.ResourceResolver;
+import org.apache.sling.distribution.DistributionException;
 import org.apache.sling.distribution.log.impl.DefaultDistributionLog;
-import org.apache.sling.distribution.packaging.DistributionPackage;
-import org.apache.sling.distribution.packaging.DistributionPackageImportException;
+import org.apache.sling.distribution.serialization.DistributionPackage;
 import org.apache.sling.distribution.packaging.DistributionPackageImporter;
-import org.apache.sling.distribution.packaging.DistributionPackageInfo;
-import org.apache.sling.distribution.transport.core.DistributionTransport;
+import org.apache.sling.distribution.serialization.DistributionPackageInfo;
 import org.apache.sling.distribution.transport.DistributionTransportSecretProvider;
+import org.apache.sling.distribution.transport.core.DistributionTransport;
 import org.apache.sling.distribution.transport.impl.DistributionEndpoint;
 import org.apache.sling.distribution.transport.impl.MultipleEndpointDistributionTransport;
 import org.apache.sling.distribution.transport.impl.SimpleHttpDistributionTransport;
 import org.apache.sling.distribution.transport.impl.TransportEndpointStrategyType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Remote implementation of {@link org.apache.sling.distribution.packaging.DistributionPackageImporter}
@@ -45,20 +43,14 @@ public class RemoteDistributionPackageImporter implements DistributionPackageImp
 
 
     private DistributionTransport transportHandler;
-    private final DefaultDistributionLog log;
-    private DistributionTransportSecretProvider distributionTransportSecretProvider;
 
 
     public RemoteDistributionPackageImporter(DefaultDistributionLog log, DistributionTransportSecretProvider distributionTransportSecretProvider,
                                              Map<String, String> endpointsMap,
                                              TransportEndpointStrategyType transportEndpointStrategyType) {
-        this.log = log;
-        this.distributionTransportSecretProvider = distributionTransportSecretProvider;
-
         if (distributionTransportSecretProvider == null) {
             throw new IllegalArgumentException("distributionTransportSecretProvider is required");
         }
-
 
         Map<String, DistributionTransport> transportHandlers = new HashMap<String, DistributionTransport>();
 
@@ -74,16 +66,13 @@ public class RemoteDistributionPackageImporter implements DistributionPackageImp
 
     }
 
-    public void importPackage(@Nonnull ResourceResolver resourceResolver, @Nonnull DistributionPackage distributionPackage) throws DistributionPackageImportException {
-        try {
-            transportHandler.deliverPackage(resourceResolver, distributionPackage);
-        } catch (Exception e) {
-            throw new DistributionPackageImportException("failed in importing package " + distributionPackage, e);
-        }
+    public void importPackage(@Nonnull ResourceResolver resourceResolver, @Nonnull DistributionPackage distributionPackage) throws DistributionException {
+        transportHandler.deliverPackage(resourceResolver, distributionPackage);
     }
 
-    public DistributionPackageInfo importStream(@Nonnull ResourceResolver resourceResolver, @Nonnull InputStream stream) throws DistributionPackageImportException {
-        throw new DistributionPackageImportException("not supported");
+    @Nonnull
+    public DistributionPackageInfo importStream(@Nonnull ResourceResolver resourceResolver, @Nonnull InputStream stream) throws DistributionException {
+        throw new DistributionException("not supported");
     }
 
 }

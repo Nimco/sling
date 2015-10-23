@@ -29,6 +29,8 @@ import org.apache.felix.scr.annotations.Component;
 import org.apache.felix.scr.annotations.Property;
 import org.apache.felix.scr.annotations.Service;
 import org.apache.sling.commons.osgi.PropertiesUtil;
+import org.apache.sling.discovery.base.connectors.BaseConfig;
+import org.apache.sling.discovery.commons.providers.spi.base.DiscoveryLiteConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,8 +41,8 @@ import org.slf4j.LoggerFactory;
  * The properties are described below under.
  */
 @Component(metatype = true, label="%config.name", description="%config.description")
-@Service(value = { Config.class })
-public class Config {
+@Service(value = { Config.class, BaseConfig.class, DiscoveryLiteConfig.class })
+public class Config implements BaseConfig, DiscoveryLiteConfig {
 
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
@@ -116,15 +118,6 @@ public class Config {
     private String discoveryResourcePath = DEFAULT_DISCOVERY_RESOURCE_PATH;
 
     /**
-     * If set to true the TOPOLOGY_INIT event will be sent only once the cluster view was established.
-     * This can mean there is a delay until the voting in the cluster was finished.
-     * But the advantage of delaying the INIT event is to make sure no two instances see themselves
-     * as leader at startup. (see SLING-3750).
-     */
-    @Property(boolValue=true)
-    private static final String DELAY_INIT_EVENT_UNTIL_VOTED = "delayInitEventUntilVoted";
-
-    /**
      * If set to true, local-loops of topology connectors are automatically stopped when detected so.
      */
     @Property(boolValue=false)
@@ -182,9 +175,6 @@ public class Config {
     
     /** True when auto-stop of a local-loop is enabled. Default is false. **/
     private boolean autoStopLocalLoopEnabled;
-    
-    /** True to make sure the INIT delay is only sent once there is (the first) established view in the cluster **/
-    private boolean delayInitEventUntilVoted = true; /* default: true */
     
     /**
      * True when the hmac is enabled and signing is disabled.
@@ -317,7 +307,6 @@ public class Config {
         logger.debug("configure: invertRepositoryDescriptor='{}'",
                 this.invertRepositoryDescriptor);
 
-        delayInitEventUntilVoted = PropertiesUtil.toBoolean(properties.get(DELAY_INIT_EVENT_UNTIL_VOTED), true);
         autoStopLocalLoopEnabled = PropertiesUtil.toBoolean(properties.get(AUTO_STOP_LOCAL_LOOP_ENABLED), false);
         gzipConnectorRequestsEnabled = PropertiesUtil.toBoolean(properties.get(GZIP_CONNECTOR_REQUESTS_ENABLED), false);
         
@@ -352,7 +341,7 @@ public class Config {
      * Returns the socket connect() timeout used by the topology connector, 0 disables the timeout
      * @return the socket connect() timeout used by the topology connector, 0 disables the timeout
      */
-    public int getConnectionTimeout() {
+    public int getSocketConnectTimeout() {
         return connectionTimeout;
     }
 
@@ -400,12 +389,16 @@ public class Config {
         return topologyConnectorWhitelist;
     }
 
+    protected String getDiscoveryResourcePath() {
+        return discoveryResourcePath;
+    }
+    
     /**
      * Returns the resource path where cluster instance informations are stored.
      * @return the resource path where cluster instance informations are stored
      */
     public String getClusterInstancesPath() {
-        return discoveryResourcePath + CLUSTERINSTANCES_RESOURCE;
+        return getDiscoveryResourcePath() + CLUSTERINSTANCES_RESOURCE;
     }
 
     /**
@@ -413,7 +406,7 @@ public class Config {
      * @return the resource path where the established view is stored
      */
     public String getEstablishedViewPath() {
-        return discoveryResourcePath + ESTABLISHED_VIEW_RESOURCE;
+        return getDiscoveryResourcePath() + ESTABLISHED_VIEW_RESOURCE;
     }
 
     /**
@@ -421,7 +414,7 @@ public class Config {
      * @return the resource path where ongoing votings are stored
      */
     public String getOngoingVotingsPath() {
-        return discoveryResourcePath + ONGOING_VOTING_RESOURCE;
+        return getDiscoveryResourcePath() + ONGOING_VOTING_RESOURCE;
     }
 
     /**
@@ -429,7 +422,7 @@ public class Config {
      * @return the resource path where the previous view is stored
      */
     public String getPreviousViewPath() {
-        return discoveryResourcePath + PREVIOUS_VIEW_RESOURCE;
+        return getDiscoveryResourcePath() + PREVIOUS_VIEW_RESOURCE;
     }
 
     /**
@@ -494,14 +487,6 @@ public class Config {
     }
     
     /**
-     * @return true to make sure the INIT event is only sent to topology listeners once
-     * there is (eg the first) an established cluster view
-     */
-    public boolean isDelayInitEventUntilVoted() {
-        return delayInitEventUntilVoted;
-    }
-    
-    /**
      * @return true if the auto-stopping of local-loop topology connectors is enabled.
      */
     public boolean isAutoStopLocalLoopEnabled() {
@@ -536,4 +521,35 @@ public class Config {
             return factor * getHeartbeatInterval();
         }
     }
+
+    @Override
+    public long getConnectorPingInterval() {
+        return getHeartbeatInterval();
+    }
+
+    @Override
+    public long getConnectorPingTimeout() {
+        return getHeartbeatTimeout();
+    }
+
+    @Override
+    public String getSyncTokenPath() {
+        return getDiscoveryResourcePath() + "/synctokens";
+    }
+
+    @Override
+    public String getIdMapPath() {
+        return getDiscoveryResourcePath() + "/idmaps";
+    }
+
+    @Override
+    public long getBgTimeoutMillis() {
+        return -1;
+    }
+
+    @Override
+    public long getBgIntervalMillis() {
+        return 1000;
+    }
+
 }

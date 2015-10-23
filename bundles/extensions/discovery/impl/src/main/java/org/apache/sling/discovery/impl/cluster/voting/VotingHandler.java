@@ -38,8 +38,8 @@ import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.api.resource.ResourceResolverFactory;
 import org.apache.sling.api.resource.ValueMap;
+import org.apache.sling.discovery.commons.providers.util.ResourceHelper;
 import org.apache.sling.discovery.impl.Config;
-import org.apache.sling.discovery.impl.common.resource.ResourceHelper;
 import org.apache.sling.settings.SlingSettingsService;
 import org.osgi.framework.Constants;
 import org.osgi.service.component.ComponentContext;
@@ -79,6 +79,21 @@ public class VotingHandler implements EventHandler {
 
     /** the sling id of the local instance **/
     private String slingId;
+
+    /** the HeartbeatHandler sets the leaderElectionid - this is subsequently used
+     * to ensure the leaderElectionId is correctly set upon voting
+     */
+    private volatile String leaderElectionId;
+    
+    /** for testing only **/
+    public static VotingHandler testConstructor(SlingSettingsService settingsService,
+            ResourceResolverFactory factory, Config config) {
+        VotingHandler handler = new VotingHandler();
+        handler.slingSettingsService = settingsService;
+        handler.resolverFactory = factory;
+        handler.config = config;
+        return handler;
+    }
 
     protected void activate(final ComponentContext context) {
         slingId = slingSettingsService.getSlingId();
@@ -135,6 +150,7 @@ public class VotingHandler implements EventHandler {
      */
     public synchronized void analyzeVotings(final ResourceResolver resourceResolver) throws PersistenceException {
         // SLING-3406: refreshing resourceResolver/session here to get the latest state from the repository
+        logger.debug("analyzeVotings: start. slingId: {}", slingId);
         resourceResolver.refresh();
         VotingView winningVote = VotingHelper.getWinningVoting(
                 resourceResolver, config);
@@ -171,13 +187,13 @@ public class VotingHandler implements EventHandler {
                 // ongoingVotingRes, and I have not voted on
                 // ongoingVotingRes yet.
                 // so I vote no there now
-                ongoingVotingRes.vote(slingId, false);
+                ongoingVotingRes.vote(slingId, false, null);
                 it.remove();
             } else if (!ongoingVotingRes.matchesLiveView(clusterNodesRes,
                     config)) {
                 logger.warn("analyzeVotings: encountered a voting which does not match mine. Voting no: "
                         + ongoingVotingRes);
-                ongoingVotingRes.vote(slingId, false);
+                ongoingVotingRes.vote(slingId, false, null);
                 it.remove();
             } else if (ongoingVotingRes.isInitiatedBy(slingId)
                     && ongoingVotingRes.hasNoVotes()) {
@@ -214,7 +230,7 @@ public class VotingHandler implements EventHandler {
 	            logger.debug("analyzeVotings: only one voting found for which I did not yet vote - and it is not mine. I'll vote yes then: "
 	                    + votingResource);
         	}
-            votingResource.vote(slingId, true);
+            votingResource.vote(slingId, true, leaderElectionId);
         }
 
         // otherwise there is more than one voting going on, all matching my
@@ -255,15 +271,15 @@ public class VotingHandler implements EventHandler {
 	            logger.debug("analyzeVotings: I apparently have not yet voted. So I shall vote now for the lowest id which is: "
 	                    + lowestVoting);
         	}
-            lowestVoting.vote(slingId, true);
+            lowestVoting.vote(slingId, true, leaderElectionId);
         } else {
             // otherwise I've already voted, but not for the lowest. which
             // is a shame.
             // I shall change my mind!
             logger.warn("analyzeVotings: I've already voted - but it so happened that there was a lower voting created after I voted... so I shall change my vote from "
                     + myYesVoteResource + " to " + lowestVoting);
-            myYesVoteResource.vote(slingId, null);
-            lowestVoting.vote(slingId, true);
+            myYesVoteResource.vote(slingId, null, null);
+            lowestVoting.vote(slingId, true, leaderElectionId);
         }
     	if (logger.isDebugEnabled()) {
 	        logger.debug("analyzeVotings: all done now. I've voted yes for "
@@ -389,10 +405,8 @@ public class VotingHandler implements EventHandler {
         // 3b: move the result under /established
         final String newEstablishedViewPath = establishedViewsResource.getPath()
                 + "/" + winningVoteResource.getName();
-    	if (logger.isDebugEnabled()) {
-	        logger.debug("promote: promote to new established node "
+        logger.info("promote: promote to new established node "
 	                + newEstablishedViewPath);
-    	}
         ResourceHelper.moveResource(winningVoteResource, newEstablishedViewPath);
 
         // step 4: delete all ongoing votings...
@@ -431,5 +445,10 @@ public class VotingHandler implements EventHandler {
 
         logger.debug("promote: done with promotiong. saving.");
         resourceResolver.commit();
+    }
+
+    public void setLeaderElectionId(String leaderElectionId) {
+        logger.info("setLeaderElectionId: leaderElectionId="+leaderElectionId);
+        this.leaderElectionId = leaderElectionId;
     }
 }

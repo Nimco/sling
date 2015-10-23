@@ -31,7 +31,8 @@ import org.apache.sling.api.SlingHttpServletResponse;
 import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.api.servlets.SlingAllMethodsServlet;
 import org.apache.sling.distribution.DistributionRequest;
-import org.apache.sling.distribution.packaging.DistributionPackage;
+import org.apache.sling.distribution.DistributionException;
+import org.apache.sling.distribution.serialization.DistributionPackage;
 import org.apache.sling.distribution.packaging.DistributionPackageExporter;
 import org.apache.sling.distribution.resources.DistributionResourceTypes;
 import org.apache.sling.distribution.transport.impl.HttpTransportUtils;
@@ -46,7 +47,6 @@ import org.slf4j.LoggerFactory;
 public class DistributionPackageExporterServlet extends SlingAllMethodsServlet {
 
     private final Logger log = LoggerFactory.getLogger(getClass());
-
 
 
     @Override
@@ -74,7 +74,6 @@ public class DistributionPackageExporterServlet extends SlingAllMethodsServlet {
             log.error("error while exporting package", t);
         }
     }
-
 
     protected void exportOnePackage(SlingHttpServletRequest request, SlingHttpServletResponse response, boolean delete)
             throws ServletException, IOException {
@@ -124,7 +123,7 @@ public class DistributionPackageExporterServlet extends SlingAllMethodsServlet {
 
                         // everything ok
                         response.setStatus(200);
-                        log.info("exported package {} was sent (and deleted={}), bytes written {}", new Object[] { packageId, delete, bytesCopied });
+                        log.info("exported package {} was sent (and deleted={}), bytes written {}", new Object[]{packageId, delete, bytesCopied});
                     } else {
                         log.warn("fetched a null package");
                     }
@@ -143,9 +142,7 @@ public class DistributionPackageExporterServlet extends SlingAllMethodsServlet {
         }
     }
 
-
-
-    void deletePackage(final SlingHttpServletRequest request, final SlingHttpServletResponse response) {
+    void deletePackage(final SlingHttpServletRequest request, final SlingHttpServletResponse response) throws DistributionException {
         DistributionPackageExporter distributionPackageExporter = request
                 .getResource()
                 .adaptTo(DistributionPackageExporter.class);
@@ -166,6 +163,7 @@ public class DistributionPackageExporterServlet extends SlingAllMethodsServlet {
             response.setStatus(204);
             log.debug("nothing to delete {}", id);
         }
+
 
 
     }

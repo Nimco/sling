@@ -18,6 +18,7 @@ package org.apache.sling.security.impl;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Dictionary;
 import java.util.HashMap;
@@ -62,11 +63,17 @@ public class ContentDispositionFilter implements Filter {
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
     
     @Property(label = "Content Disposition Paths", 
-            description = "These paths are filtered by the filter. "+
+            description = "These paths are checked by the filter. "+
                     "Each entry is of the form 'path [ \":\" CSV of excluded content types ]'. " +
                     "Invalid entries are logged and ignored."
                     , unbounded = PropertyUnbounded.ARRAY, value = { "" })
     private static final String PROP_CONTENT_DISPOSTION_PATHS = "sling.content.disposition.paths";
+    
+    @Property(label = "Content Disposition Excluded Paths", 
+            description = "These paths are excluded by the filter. "+
+                    "Each entry is of the form 'path'. "
+                    , unbounded = PropertyUnbounded.ARRAY, value = { "" })
+    private static final String PROP_CONTENT_DISPOSTION_EXCLUDED_PATHS = "sling.content.disposition.excluded.paths";
     
     private static final boolean DEFAULT_ENABLE_CONTENT_DISPOSTION_ALL_PATHS = false;
     @Property(boolValue = DEFAULT_ENABLE_CONTENT_DISPOSTION_ALL_PATHS ,
@@ -84,6 +91,8 @@ public class ContentDispositionFilter implements Filter {
      * Array of prefixes of paths
      */
     private String[] contentDispositionPathsPfx;
+    
+    Set contentDispositionExcludedPaths;
 
     private Map<String, Set<String>> contentTypesMapping;
     
@@ -142,8 +151,13 @@ public class ContentDispositionFilter implements Filter {
         
         enableContentDispositionAllPaths =  PropertiesUtil.toBoolean(props.get(PROP_ENABLE_CONTENT_DISPOSTION_ALL_PATHS),DEFAULT_ENABLE_CONTENT_DISPOSTION_ALL_PATHS);
         
-        logger.info("Initialized. content disposition paths: {}, content disposition paths-pfx {}. Enable Content Disposition for all paths is set to {}", new Object[]{
-                contentDispositionPaths, contentDispositionPathsPfx, enableContentDispositionAllPaths}
+        
+        String[] contentDispostionExcludedPathsArray = PropertiesUtil.toStringArray(props.get(PROP_CONTENT_DISPOSTION_EXCLUDED_PATHS));
+        
+        contentDispositionExcludedPaths = new HashSet<String>(Arrays.asList(contentDispostionExcludedPathsArray));
+        
+        logger.info("Initialized. content disposition paths: {}, content disposition paths-pfx {}, content disposition excluded paths: {}. Enable Content Disposition for all paths is set to {}", new Object[]{
+                contentDispositionPaths, contentDispositionPathsPfx, contentDispositionExcludedPaths, enableContentDispositionAllPaths}
         );
     }
     
@@ -207,45 +221,50 @@ public class ContentDispositionFilter implements Filter {
          * @see javax.servlet.ServletResponseWrapper#setContentType(java.lang.String)
          */
         public void setContentType(String type) { 
-            String previousContentType = (String) request.getAttribute(ATTRIBUTE_NAME);
-            
-            if (previousContentType != null && previousContentType.equals(type)) {
-                return;
-            }
-            request.setAttribute(ATTRIBUTE_NAME, type);
-            Resource resource = request.getResource();
-            
-            if (enableContentDispositionAllPaths) {
-                setContentDisposition(resource);
-            } else {
+            if ("GET".equals(request.getMethod())) {
+                String previousContentType = (String) request.getAttribute(ATTRIBUTE_NAME);
+
+                if (previousContentType != null && previousContentType.equals(type)) {
+                    return;
+                }
+                request.setAttribute(ATTRIBUTE_NAME, type);
+                Resource resource = request.getResource();
                 String resourcePath = resource.getPath();
 
-                boolean contentDispositionAdded = false;
-                if (contentDispositionPaths.contains(resourcePath)) {
+                if (!contentDispositionExcludedPaths.contains(resourcePath)) {
 
-                    if (contentTypesMapping.containsKey(resourcePath)) {
-                        Set <String> exceptions = contentTypesMapping.get(resourcePath);
-                        if (!exceptions.contains(type)) {
-                            contentDispositionAdded = setContentDisposition(resource);
-                        }
-                    } else {
-                        contentDispositionAdded = setContentDisposition(resource);
-                    }
-                }            
-                if (!contentDispositionAdded) {
-                    for (String path : contentDispositionPathsPfx) {
-                        if (resourcePath.startsWith(path)) {
-                            if (contentTypesMapping.containsKey(path)) {
-                                Set <String> exceptions = contentTypesMapping.get(path);
+                    if (enableContentDispositionAllPaths) {
+                        setContentDisposition(resource);
+                    } else {               
+
+                        boolean contentDispositionAdded = false;
+                        if (contentDispositionPaths.contains(resourcePath)) {
+
+                            if (contentTypesMapping.containsKey(resourcePath)) {
+                                Set <String> exceptions = contentTypesMapping.get(resourcePath);
                                 if (!exceptions.contains(type)) {
-                                    setContentDisposition(resource);
-                                    break;
+                                    contentDispositionAdded = setContentDisposition(resource);
                                 }
                             } else {
-                                setContentDisposition(resource);
-                                break;
+                                contentDispositionAdded = setContentDisposition(resource);
                             }
+                        }            
+                        if (!contentDispositionAdded) {
+                            for (String path : contentDispositionPathsPfx) {
+                                if (resourcePath.startsWith(path)) {
+                                    if (contentTypesMapping.containsKey(path)) {
+                                        Set <String> exceptions = contentTypesMapping.get(path);
+                                        if (!exceptions.contains(type)) {
+                                            setContentDisposition(resource);
+                                            break;
+                                        }
+                                    } else {
+                                        setContentDisposition(resource);
+                                        break;
+                                    }
 
+                                }
+                            }
                         }
                     }
                 }
@@ -268,13 +287,13 @@ public class ContentDispositionFilter implements Filter {
             boolean jcrData = false;
             if (resource!= null) {
                 ValueMap props = resource.adaptTo(ValueMap.class);
-                if (props.containsKey(PROP_JCR_DATA) ) {
+                if (props != null && props.containsKey(PROP_JCR_DATA) ) {
                     jcrData = true;
                 } else {
                     Resource jcrContent = resource.getChild(JCR_CONTENT_LEAF);
                     if (jcrContent!= null) {
                         props = jcrContent.adaptTo(ValueMap.class);
-                        if (props.containsKey(PROP_JCR_DATA) ) {
+                        if (props != null && props.containsKey(PROP_JCR_DATA) ) {
                             jcrData = true;
                         }
                     }

@@ -18,6 +18,7 @@
  */
 package org.apache.sling.distribution.serialization.impl.vlt;
 
+import javax.annotation.CheckForNull;
 import javax.annotation.Nonnull;
 import java.io.InputStream;
 import java.util.Map;
@@ -37,12 +38,14 @@ import org.apache.sling.commons.osgi.PropertiesUtil;
 import org.apache.sling.distribution.DistributionRequest;
 import org.apache.sling.distribution.component.impl.DistributionComponentConstants;
 import org.apache.sling.distribution.component.impl.SettingsUtils;
-import org.apache.sling.distribution.packaging.DistributionPackage;
+import org.apache.sling.distribution.DistributionException;
+import org.apache.sling.distribution.serialization.DistributionPackage;
 import org.apache.sling.distribution.serialization.DistributionPackageBuilder;
-import org.apache.sling.distribution.serialization.DistributionPackageBuildingException;
-import org.apache.sling.distribution.serialization.DistributionPackageReadingException;
 import org.apache.sling.distribution.serialization.impl.ResourceSharedDistributionPackageBuilder;
 
+/**
+ * A package builder for Apache Jackrabbit FileVault based implementations.
+ */
 @Component(metatype = true,
         label = "Apache Sling Distribution Packaging - Vault Package Builder Factory",
         description = "OSGi configuration for vault package builders",
@@ -53,13 +56,11 @@ import org.apache.sling.distribution.serialization.impl.ResourceSharedDistributi
 @Service(DistributionPackageBuilder.class)
 public class VaultDistributionPackageBuilderFactory implements DistributionPackageBuilder {
 
-
     /**
      * name of this package builder.
      */
     @Property(label = "Name", description = "The name of the package builder.")
     public static final String NAME = DistributionComponentConstants.PN_NAME;
-
 
 
     /**
@@ -130,7 +131,7 @@ public class VaultDistributionPackageBuilderFactory implements DistributionPacka
         String[] packageRoots = SettingsUtils.removeEmptyEntries(PropertiesUtil.toStringArray(config.get(PACKAGE_ROOTS), null));
         String[] packageFilters = SettingsUtils.removeEmptyEntries(PropertiesUtil.toStringArray(config.get(PACKAGE_FILTERS), null));
 
-        String tempFsFolder =  SettingsUtils.removeEmptyEntry(PropertiesUtil.toString(config.get(TEMP_FS_FOLDER), null));
+        String tempFsFolder = SettingsUtils.removeEmptyEntry(PropertiesUtil.toString(config.get(TEMP_FS_FOLDER), null));
         String tempJcrFolder = SettingsUtils.removeEmptyEntry(PropertiesUtil.toString(config.get(TEMP_JCR_FOLDER), null));
 
         ImportMode importMode = null;
@@ -140,35 +141,36 @@ public class VaultDistributionPackageBuilderFactory implements DistributionPacka
 
         AccessControlHandling aclHandling = null;
         if (aclHandlingString != null) {
-            aclHandling= AccessControlHandling.valueOf(aclHandlingString.trim());
+            aclHandling = AccessControlHandling.valueOf(aclHandlingString.trim());
         }
 
         if ("filevlt".equals(type)) {
             packageBuilder = new ResourceSharedDistributionPackageBuilder(new FileVaultDistributionPackageBuilder(name, packaging, importMode, aclHandling, packageRoots, packageFilters, tempFsFolder));
-        } else  {
+        } else {
             packageBuilder = new ResourceSharedDistributionPackageBuilder(new JcrVaultDistributionPackageBuilder(name, packaging, importMode, aclHandling, packageRoots, packageFilters, tempFsFolder, tempJcrFolder));
         }
     }
-
 
     public String getType() {
         return packageBuilder.getType();
     }
 
-
-    public DistributionPackage createPackage(@Nonnull ResourceResolver resourceResolver, @Nonnull DistributionRequest request) throws DistributionPackageBuildingException {
+    @Nonnull
+    public DistributionPackage createPackage(@Nonnull ResourceResolver resourceResolver, @Nonnull DistributionRequest request) throws DistributionException {
         return packageBuilder.createPackage(resourceResolver, request);
     }
 
-    public DistributionPackage readPackage(@Nonnull ResourceResolver resourceResolver, @Nonnull InputStream stream) throws DistributionPackageReadingException {
+    @Nonnull
+    public DistributionPackage readPackage(@Nonnull ResourceResolver resourceResolver, @Nonnull InputStream stream) throws DistributionException {
         return packageBuilder.readPackage(resourceResolver, stream);
     }
 
-    public DistributionPackage getPackage(@Nonnull ResourceResolver resourceResolver, @Nonnull String id) {
+    @CheckForNull
+    public DistributionPackage getPackage(@Nonnull ResourceResolver resourceResolver, @Nonnull String id) throws DistributionException {
         return packageBuilder.getPackage(resourceResolver, id);
     }
 
-    public boolean installPackage(@Nonnull ResourceResolver resourceResolver, @Nonnull DistributionPackage distributionPackage) throws DistributionPackageReadingException {
+    public boolean installPackage(@Nonnull ResourceResolver resourceResolver, @Nonnull DistributionPackage distributionPackage) throws DistributionException {
         return packageBuilder.installPackage(resourceResolver, distributionPackage);
     }
 }

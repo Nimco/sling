@@ -20,22 +20,20 @@ package org.apache.sling.distribution.packaging.impl.importer;
 
 import javax.annotation.Nonnull;
 import java.io.InputStream;
-import java.util.Arrays;
 
 import org.apache.sling.api.resource.ResourceResolver;
-import org.apache.sling.distribution.packaging.DistributionPackage;
-import org.apache.sling.distribution.packaging.DistributionPackageImportException;
+import org.apache.sling.distribution.DistributionException;
+import org.apache.sling.distribution.serialization.DistributionPackage;
 import org.apache.sling.distribution.packaging.DistributionPackageImporter;
-import org.apache.sling.distribution.packaging.DistributionPackageInfo;
+import org.apache.sling.distribution.serialization.DistributionPackageInfo;
 import org.apache.sling.distribution.packaging.impl.DistributionPackageUtils;
 import org.apache.sling.distribution.serialization.DistributionPackageBuilder;
-import org.apache.sling.distribution.serialization.DistributionPackageReadingException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * {@link org.apache.sling.distribution.packaging.DistributionPackageImporter} implementation which imports a FileVault
- * based {@link org.apache.sling.distribution.packaging.DistributionPackage} locally.
+ * based {@link DistributionPackage} locally.
  */
 
 public class LocalDistributionPackageImporter implements DistributionPackageImporter {
@@ -53,23 +51,17 @@ public class LocalDistributionPackageImporter implements DistributionPackageImpo
         this.packageBuilder = packageBuilder;
     }
 
-
-    public void importPackage(@Nonnull ResourceResolver resourceResolver, @Nonnull DistributionPackage distributionPackage) throws DistributionPackageImportException {
-        try {
-            boolean success = packageBuilder.installPackage(resourceResolver, distributionPackage);
+    public void importPackage(@Nonnull ResourceResolver resourceResolver, @Nonnull DistributionPackage distributionPackage) throws DistributionException {
+        boolean success = packageBuilder.installPackage(resourceResolver, distributionPackage);
 
 
-            if (!success) {
-                log.warn("could not install distribution package {}", distributionPackage.getId());
-            }
-
-        } catch (Exception e) {
-            log.error("cannot import a package from the given stream of type {}", distributionPackage.getType());
-            throw new DistributionPackageImportException(e);
+        if (!success) {
+            log.warn("could not install distribution package {}", distributionPackage.getId());
         }
     }
 
-    public DistributionPackageInfo importStream(@Nonnull ResourceResolver resourceResolver, @Nonnull InputStream stream) throws DistributionPackageImportException {
+    @Nonnull
+    public DistributionPackageInfo importStream(@Nonnull ResourceResolver resourceResolver, @Nonnull InputStream stream) throws DistributionException {
         DistributionPackage distributionPackage = null;
         try {
             distributionPackage = packageBuilder.readPackage(resourceResolver, stream);
@@ -81,8 +73,6 @@ public class LocalDistributionPackageImporter implements DistributionPackageImpo
             }
 
             return distributionPackage.getInfo();
-        } catch (DistributionPackageReadingException e) {
-            throw new DistributionPackageImportException("cannot read a package from the given stream", e);
         } finally {
             DistributionPackageUtils.deleteSafely(distributionPackage);
         }

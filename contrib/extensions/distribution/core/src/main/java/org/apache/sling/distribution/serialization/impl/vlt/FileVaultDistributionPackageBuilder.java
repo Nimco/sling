@@ -21,28 +21,24 @@ package org.apache.sling.distribution.serialization.impl.vlt;
 import javax.annotation.Nonnull;
 import javax.jcr.Session;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.TreeMap;
 import java.util.UUID;
 
-import org.apache.commons.io.IOUtils;
 import org.apache.jackrabbit.vault.fs.api.ImportMode;
 import org.apache.jackrabbit.vault.fs.api.PathFilterSet;
 import org.apache.jackrabbit.vault.fs.api.WorkspaceFilter;
 import org.apache.jackrabbit.vault.fs.io.AccessControlHandling;
 import org.apache.jackrabbit.vault.fs.io.ImportOptions;
 import org.apache.jackrabbit.vault.packaging.ExportOptions;
-import org.apache.jackrabbit.vault.packaging.PackageException;
 import org.apache.jackrabbit.vault.packaging.Packaging;
 import org.apache.jackrabbit.vault.packaging.VaultPackage;
 import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.distribution.DistributionRequest;
-import org.apache.sling.distribution.packaging.DistributionPackage;
+import org.apache.sling.distribution.DistributionException;
+import org.apache.sling.distribution.serialization.DistributionPackage;
 import org.apache.sling.distribution.serialization.DistributionPackageBuilder;
-import org.apache.sling.distribution.serialization.DistributionPackageBuildingException;
-import org.apache.sling.distribution.serialization.DistributionPackageReadingException;
 import org.apache.sling.distribution.serialization.impl.AbstractDistributionPackageBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,7 +46,7 @@ import org.slf4j.LoggerFactory;
 /**
  * a {@link org.apache.sling.distribution.serialization.DistributionPackageBuilder} based on Apache Jackrabbit FileVault.
  * <p/>
- * Each {@link org.apache.sling.distribution.packaging.DistributionPackage} created by {@link FileVaultDistributionPackageBuilder} is
+ * Each {@link DistributionPackage} created by {@link FileVaultDistributionPackageBuilder} is
  * backed by a {@link org.apache.jackrabbit.vault.packaging.VaultPackage}. 
  */
 public class FileVaultDistributionPackageBuilder extends AbstractDistributionPackageBuilder implements
@@ -70,7 +66,6 @@ public class FileVaultDistributionPackageBuilder extends AbstractDistributionPac
     private final File tempDirectory;
     private final TreeMap<String, PathFilterSet> filters;
 
-
     public FileVaultDistributionPackageBuilder(String type, Packaging packaging, ImportMode importMode, AccessControlHandling aclHandling, String[] packageRoots, String[] filterRules, String tempFilesFolder) {
         super(type);
         this.packaging = packaging;
@@ -87,14 +82,14 @@ public class FileVaultDistributionPackageBuilder extends AbstractDistributionPac
 
     @Override
     protected DistributionPackage createPackageForAdd(@Nonnull ResourceResolver resourceResolver, @Nonnull DistributionRequest request)
-            throws DistributionPackageBuildingException {
+            throws DistributionException {
         Session session = null;
         VaultPackage vaultPackage = null;
         try {
             session = getSession(resourceResolver);
 
             String packageGroup = "sling/distribution";
-            String packageName = getType() + "_" + System.currentTimeMillis() + "_" +  UUID.randomUUID();
+            String packageName = getType() + "_" + System.currentTimeMillis() + "_" + UUID.randomUUID();
 
             WorkspaceFilter filter = VltUtils.createFilter(request, filters);
             ExportOptions opts = VltUtils.getExportOptions(filter, packageRoots, packageGroup, packageName, VERSION);
@@ -103,9 +98,9 @@ public class FileVaultDistributionPackageBuilder extends AbstractDistributionPac
 
             vaultPackage = VltUtils.createPackage(packaging.getPackageManager(), session, opts, tempDirectory);
             return new FileVaultDistributionPackage(getType(), vaultPackage);
-        } catch (Exception e) {
+        } catch (Throwable e) {
             VltUtils.deletePackage(vaultPackage);
-            throw new DistributionPackageBuildingException(e);
+            throw new DistributionException(e);
         } finally {
             ungetSession(session);
         }
@@ -113,7 +108,7 @@ public class FileVaultDistributionPackageBuilder extends AbstractDistributionPac
 
     @Override
     protected DistributionPackage readPackageInternal(@Nonnull ResourceResolver resourceResolver, @Nonnull final InputStream stream)
-            throws DistributionPackageReadingException {
+            throws DistributionException {
         log.debug("reading a stream");
         VaultPackage vaultPackage = null;
         try {
@@ -121,12 +116,11 @@ public class FileVaultDistributionPackageBuilder extends AbstractDistributionPac
 
             return new FileVaultDistributionPackage(getType(), vaultPackage);
 
-        } catch (Exception e) {
+        } catch (Throwable e) {
             VltUtils.deletePackage(vaultPackage);
-            throw new DistributionPackageReadingException("could not read package", e);
+            throw new DistributionException(e);
         }
     }
-
 
     @Override
     protected DistributionPackage getPackageInternal(@Nonnull ResourceResolver resourceResolver, @Nonnull String id) {
@@ -143,9 +137,8 @@ public class FileVaultDistributionPackageBuilder extends AbstractDistributionPac
         return distributionPackage;
     }
 
-
     @Override
-    public boolean installPackageInternal(@Nonnull ResourceResolver resourceResolver, @Nonnull DistributionPackage distributionPackage) throws DistributionPackageReadingException {
+    public boolean installPackageInternal(@Nonnull ResourceResolver resourceResolver, @Nonnull DistributionPackage distributionPackage) throws DistributionException {
         log.debug("reading a distribution package stream");
 
         Session session = null;
@@ -162,7 +155,7 @@ public class FileVaultDistributionPackageBuilder extends AbstractDistributionPac
             }
         } catch (Exception e) {
             log.error("could not install the package", e);
-            throw new DistributionPackageReadingException(e);
+            throw new DistributionException(e);
         } finally {
             ungetSession(session);
         }

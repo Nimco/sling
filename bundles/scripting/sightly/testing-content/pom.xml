@@ -25,15 +25,15 @@
     <parent>
         <groupId>org.apache.sling</groupId>
         <artifactId>sling</artifactId>
-        <version>24</version>
-        <relativePath/>
+        <version>25</version>
+        <relativePath />
     </parent>
 
     <!-- ======================================================================= -->
     <!-- P R O J E C T                                                           -->
     <!-- ======================================================================= -->
     <artifactId>org.apache.sling.scripting.sightly.testing-content</artifactId>
-    <version>1.0.5-SNAPSHOT</version>
+    <version>1.0.7-SNAPSHOT</version>
     <packaging>bundle</packaging>
 
     <name>Apache Sling Scripting Sightly Integration Tests Content</name>
@@ -100,7 +100,7 @@
                                 <artifactItem>
                                     <groupId>io.sightly</groupId>
                                     <artifactId>io.sightly.tck</artifactId>
-                                    <version>1.1.2</version>
+                                    <version>1.2.0</version>
                                     <type>jar</type>
                                     <outputDirectory>${project.build.directory}/sightlytck/</outputDirectory>
                                     <includes>**/*.html,**/*.js,**/*.java</includes>
@@ -203,6 +203,12 @@
             <groupId>org.apache.sling</groupId>
             <artifactId>org.apache.sling.api</artifactId>
             <version>2.1.0</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.sling</groupId>
+            <artifactId>org.apache.sling.scripting.sightly</artifactId>
+            <version>1.0.2</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>

@@ -33,11 +33,10 @@ import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.api.resource.ResourceUtil;
 import org.apache.sling.api.resource.ValueMap;
 import org.apache.sling.distribution.DistributionRequest;
-import org.apache.sling.distribution.packaging.DistributionPackage;
+import org.apache.sling.distribution.DistributionException;
+import org.apache.sling.distribution.serialization.DistributionPackage;
 import org.apache.sling.distribution.packaging.impl.DistributionPackageUtils;
 import org.apache.sling.distribution.serialization.DistributionPackageBuilder;
-import org.apache.sling.distribution.serialization.DistributionPackageBuildingException;
-import org.apache.sling.distribution.serialization.DistributionPackageReadingException;
 
 public class ResourceSharedDistributionPackageBuilder implements DistributionPackageBuilder {
 
@@ -62,22 +61,17 @@ public class ResourceSharedDistributionPackageBuilder implements DistributionPac
         return distributionPackageBuilder.getType();
     }
 
-    @CheckForNull
-    public DistributionPackage createPackage(@Nonnull ResourceResolver resourceResolver, @Nonnull DistributionRequest request) throws DistributionPackageBuildingException {
+    @Nonnull
+    public DistributionPackage createPackage(@Nonnull ResourceResolver resourceResolver, @Nonnull DistributionRequest request) throws DistributionException {
         DistributionPackage distributionPackage = distributionPackageBuilder.createPackage(resourceResolver, request);
-
-        if (distributionPackage == null) {
-            return null;
-        }
 
         String packageName = null;
         try {
             packageName = generateNameFromId(resourceResolver, distributionPackage);
 
-        }
-        catch (PersistenceException e) {
+        } catch (PersistenceException e) {
             DistributionPackageUtils.deleteSafely(distributionPackage);
-            throw new DistributionPackageBuildingException(e);
+            throw new DistributionException(e);
         }
 
         String packagePath = getPathFromName(packageName);
@@ -85,8 +79,9 @@ public class ResourceSharedDistributionPackageBuilder implements DistributionPac
 
     }
 
+    @Nonnull
     @CheckForNull
-    public DistributionPackage readPackage(@Nonnull ResourceResolver resourceResolver, @Nonnull InputStream stream) throws DistributionPackageReadingException {
+    public DistributionPackage readPackage(@Nonnull ResourceResolver resourceResolver, @Nonnull InputStream stream) throws DistributionException {
         DistributionPackage distributionPackage = distributionPackageBuilder.readPackage(resourceResolver, stream);
 
         if (distributionPackage == null) {
@@ -97,10 +92,9 @@ public class ResourceSharedDistributionPackageBuilder implements DistributionPac
         try {
             packageName = generateNameFromId(resourceResolver, distributionPackage);
 
-        }
-        catch (PersistenceException e) {
+        } catch (PersistenceException e) {
             DistributionPackageUtils.deleteSafely(distributionPackage);
-            throw new DistributionPackageReadingException(e);
+            throw new DistributionException(e);
         }
 
         String packagePath = getPathFromName(packageName);
@@ -108,7 +102,8 @@ public class ResourceSharedDistributionPackageBuilder implements DistributionPac
         return new ResourceSharedDistributionPackage(repolock, resourceResolver, packageName, packagePath, distributionPackage);
     }
 
-    public DistributionPackage getPackage(@Nonnull ResourceResolver resourceResolver, @Nonnull String distributionPackageId) {
+    @CheckForNull
+    public DistributionPackage getPackage(@Nonnull ResourceResolver resourceResolver, @Nonnull String distributionPackageId) throws DistributionException {
         String packageName = distributionPackageId;
         String originalPackageId = retrieveIdFromName(resourceResolver, packageName);
 
@@ -127,8 +122,8 @@ public class ResourceSharedDistributionPackageBuilder implements DistributionPac
         return new ResourceSharedDistributionPackage(repolock, resourceResolver, packageName, packagePath, distributionPackage);
     }
 
-    public boolean installPackage(@Nonnull ResourceResolver resourceResolver, @Nonnull DistributionPackage distributionPackage) throws DistributionPackageReadingException {
-        if (! (distributionPackage instanceof ResourceSharedDistributionPackage)) {
+    public boolean installPackage(@Nonnull ResourceResolver resourceResolver, @Nonnull DistributionPackage distributionPackage) throws DistributionException {
+        if (!(distributionPackage instanceof ResourceSharedDistributionPackage)) {
             return false;
         }
 
@@ -139,9 +134,9 @@ public class ResourceSharedDistributionPackageBuilder implements DistributionPac
     }
 
 
-    private  String generateNameFromId(ResourceResolver resourceResolver, DistributionPackage distributionPackage) throws PersistenceException {
+    private String generateNameFromId(ResourceResolver resourceResolver, DistributionPackage distributionPackage) throws PersistenceException {
 
-        String name = PACKAGE_NAME_PREFIX + "_" + System.currentTimeMillis() + "_" +  UUID.randomUUID();
+        String name = PACKAGE_NAME_PREFIX + "_" + System.currentTimeMillis() + "_" + UUID.randomUUID();
 
         Map<String, Object> properties = new HashMap<String, Object>();
         properties.put(PN_ORIGINAL_ID, distributionPackage.getId());
@@ -165,7 +160,7 @@ public class ResourceSharedDistributionPackageBuilder implements DistributionPac
 
         synchronized (repolock) {
             resourceResolver.create(resource, ResourceSharedDistributionPackage.REFERENCE_ROOT_NODE,
-                    Collections.singletonMap(ResourceResolver.PROPERTY_RESOURCE_TYPE, (Object)"sling:Folder"));
+                    Collections.singletonMap(ResourceResolver.PROPERTY_RESOURCE_TYPE, (Object) "sling:Folder"));
 
             resourceResolver.commit();
         }

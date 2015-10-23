@@ -22,51 +22,48 @@ import javax.annotation.Nonnull;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 
 import org.apache.sling.api.resource.LoginException;
 import org.apache.sling.api.resource.PersistenceException;
 import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.api.resource.ResourceResolverFactory;
-import org.apache.sling.distribution.DistributionRequestType;
-import org.apache.sling.distribution.agent.DistributionAgent;
-import org.apache.sling.distribution.agent.DistributionAgentException;
-
 import org.apache.sling.distribution.DistributionRequest;
 import org.apache.sling.distribution.DistributionRequestState;
+import org.apache.sling.distribution.DistributionRequestType;
 import org.apache.sling.distribution.DistributionResponse;
+import org.apache.sling.distribution.agent.DistributionAgent;
 import org.apache.sling.distribution.agent.DistributionAgentState;
 import org.apache.sling.distribution.component.impl.DistributionComponentKind;
 import org.apache.sling.distribution.event.DistributionEventTopics;
-import org.apache.sling.distribution.impl.CompositeDistributionResponse;
-import org.apache.sling.distribution.impl.SimpleDistributionResponse;
 import org.apache.sling.distribution.event.impl.DistributionEventFactory;
+import org.apache.sling.distribution.impl.CompositeDistributionResponse;
+import org.apache.sling.distribution.DistributionException;
+import org.apache.sling.distribution.impl.SimpleDistributionResponse;
 import org.apache.sling.distribution.log.DistributionLog;
 import org.apache.sling.distribution.log.impl.DefaultDistributionLog;
-import org.apache.sling.distribution.packaging.DistributionPackage;
-import org.apache.sling.distribution.packaging.DistributionPackageExportException;
+import org.apache.sling.distribution.queue.impl.DistributionQueueUtils;
+import org.apache.sling.distribution.serialization.DistributionPackage;
 import org.apache.sling.distribution.packaging.DistributionPackageExporter;
-import org.apache.sling.distribution.packaging.DistributionPackageImportException;
 import org.apache.sling.distribution.packaging.DistributionPackageImporter;
-import org.apache.sling.distribution.packaging.DistributionPackageInfo;
+import org.apache.sling.distribution.serialization.DistributionPackageInfo;
 import org.apache.sling.distribution.packaging.impl.DistributionPackageUtils;
 import org.apache.sling.distribution.queue.DistributionQueue;
 import org.apache.sling.distribution.queue.DistributionQueueEntry;
-import org.apache.sling.distribution.queue.DistributionQueueItemState;
-import org.apache.sling.distribution.queue.DistributionQueueState;
-import org.apache.sling.distribution.queue.impl.DistributionQueueDispatchingStrategy;
-import org.apache.sling.distribution.queue.DistributionQueueException;
+
 import org.apache.sling.distribution.queue.DistributionQueueItem;
+import org.apache.sling.distribution.queue.DistributionQueueItemState;
 import org.apache.sling.distribution.queue.DistributionQueueItemStatus;
 import org.apache.sling.distribution.queue.DistributionQueueProcessor;
 import org.apache.sling.distribution.queue.DistributionQueueProvider;
+import org.apache.sling.distribution.queue.DistributionQueueState;
+import org.apache.sling.distribution.queue.impl.DistributionQueueDispatchingStrategy;
 import org.apache.sling.distribution.trigger.DistributionRequestHandler;
 import org.apache.sling.distribution.trigger.DistributionTrigger;
-import org.apache.sling.distribution.trigger.DistributionTriggerException;
 
 
 /**
@@ -80,7 +77,8 @@ public class SimpleDistributionAgent implements DistributionAgent {
     private final DistributionPackageImporter distributionPackageImporter;
     private final DistributionPackageExporter distributionPackageExporter;
 
-    private final DistributionQueueDispatchingStrategy queueDistributionStrategy;
+    private final DistributionQueueDispatchingStrategy scheduleQueueStrategy;
+    private final DistributionQueueDispatchingStrategy errorQueueStrategy;
 
     private final DistributionEventFactory distributionEventFactory;
 
@@ -91,29 +89,33 @@ public class SimpleDistributionAgent implements DistributionAgent {
     private final String subServiceName;
     private AgentBasedRequestHandler agentBasedRequestHandler;
     private boolean active = false;
+    private final Set<String> processingQueues;
+    private final int retryAttempts;
     private final DefaultDistributionLog log;
     private final DistributionRequestType[] allowedRequests;
     private final String[] allowedRoots;
-    private final String[] passiveQueues;
 
     public SimpleDistributionAgent(String name,
                                    boolean queueProcessingEnabled,
-                                   String[] passiveQueues,
+                                   Set<String> processingQueues,
                                    String subServiceName,
                                    DistributionPackageImporter distributionPackageImporter,
                                    DistributionPackageExporter distributionPackageExporter,
                                    DistributionRequestAuthorizationStrategy distributionRequestAuthorizationStrategy,
                                    DistributionQueueProvider queueProvider,
-                                   DistributionQueueDispatchingStrategy queueDistributionStrategy,
+                                   DistributionQueueDispatchingStrategy scheduleQueueStrategy,
+                                   DistributionQueueDispatchingStrategy errorQueueStrategy,
                                    DistributionEventFactory distributionEventFactory,
                                    ResourceResolverFactory resourceResolverFactory,
                                    DefaultDistributionLog log,
                                    DistributionRequestType[] allowedRequests,
-                                   String[] allowedRoots) {
+                                   String[] allowedRoots,
+                                   int retryAttempts) {
         this.log = log;
         this.allowedRequests = allowedRequests;
         this.allowedRoots = allowedRoots;
-        this.passiveQueues = passiveQueues;
+        this.processingQueues = processingQueues;
+        this.retryAttempts = retryAttempts;
 
         // check configuration is valid
         if (name == null
@@ -122,7 +124,7 @@ public class SimpleDistributionAgent implements DistributionAgent {
                 || subServiceName == null
                 || distributionRequestAuthorizationStrategy == null
                 || queueProvider == null
-                || queueDistributionStrategy == null
+                || scheduleQueueStrategy == null
                 || distributionEventFactory == null
                 || resourceResolverFactory == null) {
 
@@ -132,7 +134,7 @@ public class SimpleDistributionAgent implements DistributionAgent {
                     subServiceName,
                     distributionRequestAuthorizationStrategy,
                     queueProvider,
-                    queueDistributionStrategy,
+                    scheduleQueueStrategy,
                     distributionEventFactory,
                     resourceResolverFactory});
             throw new IllegalArgumentException("all arguments are required: " + errorMessage);
@@ -146,13 +148,14 @@ public class SimpleDistributionAgent implements DistributionAgent {
         this.distributionPackageImporter = distributionPackageImporter;
         this.distributionPackageExporter = distributionPackageExporter;
         this.queueProvider = queueProvider;
-        this.queueDistributionStrategy = queueDistributionStrategy;
+        this.scheduleQueueStrategy = scheduleQueueStrategy;
+        this.errorQueueStrategy = errorQueueStrategy;
         this.distributionEventFactory = distributionEventFactory;
     }
 
     @Nonnull
     public DistributionResponse execute(@Nonnull ResourceResolver resourceResolver, @Nonnull DistributionRequest distributionRequest)
-            throws DistributionAgentException {
+            throws DistributionException {
 
         ResourceResolver agentResourceResolver = null;
 
@@ -185,14 +188,9 @@ public class SimpleDistributionAgent implements DistributionAgent {
             log.info(silent, "returning response {}", distributionResponse);
 
             return distributionResponse;
-        } catch (DistributionRequestAuthorizationException e) {
-            return new SimpleDistributionResponse(DistributionRequestState.DROPPED, "Request is not authorized");
         } catch (LoginException e) {
             log.error("Error executing distribution request {} {}", distributionRequest, e);
-            throw new DistributionAgentException(e);
-        } catch (DistributionPackageExportException e) {
-            log.error("Error executing distribution request {} {}", distributionRequest, e);
-            throw new DistributionAgentException(e);
+            throw new DistributionException(e);
         } finally {
             ungetAgentResourceResolver(agentResourceResolver);
         }
@@ -203,7 +201,7 @@ public class SimpleDistributionAgent implements DistributionAgent {
         return !queueProcessingEnabled;
     }
 
-    private List<DistributionPackage> exportPackages(ResourceResolver agentResourceResolver, DistributionRequest distributionRequest) throws DistributionPackageExportException {
+    private List<DistributionPackage> exportPackages(ResourceResolver agentResourceResolver, DistributionRequest distributionRequest) throws DistributionException {
         List<DistributionPackage> distributionPackages = distributionPackageExporter.exportPackages(agentResourceResolver, distributionRequest);
 
         generatePackageEvent(DistributionEventTopics.AGENT_PACKAGE_CREATED);
@@ -223,46 +221,55 @@ public class SimpleDistributionAgent implements DistributionAgent {
 
     private Collection<SimpleDistributionResponse> scheduleImportPackage(DistributionPackage distributionPackage) {
         Collection<SimpleDistributionResponse> distributionResponses = new LinkedList<SimpleDistributionResponse>();
-        log.debug("scheduling distribution of package {} {}", distributionPackage.getId(), distributionPackage);
 
         // dispatch the distribution package to the queue distribution handler
         try {
-            Iterable<DistributionQueueItemStatus> states = queueDistributionStrategy.add(distributionPackage, queueProvider);
+            Iterable<DistributionQueueItemStatus> states = scheduleQueueStrategy.add(distributionPackage, queueProvider);
             for (DistributionQueueItemStatus state : states) {
                 DistributionRequestState requestState = getRequestStateFromQueueState(state.getItemState());
                 distributionResponses.add(new SimpleDistributionResponse(requestState, state.getItemState().toString()));
             }
 
             generatePackageEvent(DistributionEventTopics.AGENT_PACKAGE_QUEUED, distributionPackage);
-        } catch (Exception e) {
+        } catch (DistributionException e) {
             log.error("an error happened during dispatching items to the queue(s)", e);
             distributionResponses.add(new SimpleDistributionResponse(DistributionRequestState.DROPPED, e.toString()));
         } finally {
-            if (distributionPackage != null) {
-                distributionPackage.close();
-            }
+            distributionPackage.close();
         }
+
+        log.info("scheduled package {} with info {}", distributionPackage.getId(), distributionPackage.getInfo());
+
 
         return distributionResponses;
     }
 
 
     @Nonnull
-    public Iterable<String> getQueueNames() {
-        return queueDistributionStrategy.getQueueNames();
+    public Set<String> getQueueNames() {
+        Set<String> queueNames = new TreeSet<String>();
+        queueNames.addAll(scheduleQueueStrategy.getQueueNames());
+        if (errorQueueStrategy != null) {
+            queueNames.addAll(errorQueueStrategy.getQueueNames());
+        }
+        return queueNames;
     }
 
-    public DistributionQueue getQueue(@Nonnull String queueName) throws DistributionAgentException {
-        DistributionQueue queue;
-        try {
-            if (queueName.length() > 0) {
-                queue = queueProvider.getQueue(queueName);
-            } else {
-                queue = queueProvider.getQueue(DistributionQueueDispatchingStrategy.DEFAULT_QUEUE_NAME);
-            }
-        } catch (DistributionQueueException e) {
-            throw new DistributionAgentException(e);
+    public DistributionQueue getQueue(@Nonnull String queueName) {
+        queueName = queueName.length() > 0 ? queueName : DistributionQueueDispatchingStrategy.DEFAULT_QUEUE_NAME;
+        Set<String> queues = getQueueNames();
+        if (!queues.contains(queueName)) {
+            return null;
         }
+
+        DistributionQueue queue = null;
+
+        try {
+            queue = queueProvider.getQueue(queueName);
+        } catch (DistributionException e) {
+            log.error("cannot get queue", e);
+        }
+
         return queue;
     }
 
@@ -281,22 +288,15 @@ public class SimpleDistributionAgent implements DistributionAgent {
         }
 
         for (String queueName : getQueueNames()) {
-            DistributionQueue queue = null;
-            try {
-                 queue = getQueue(queueName);
-            } catch (DistributionAgentException e) {
+            DistributionQueue queue = getQueue(queueName);
 
+            DistributionQueueState state = queue.getStatus().getState();
+            if (DistributionQueueState.BLOCKED.equals(state)) {
+                return DistributionAgentState.BLOCKED;
             }
 
-            if (queue != null) {
-                DistributionQueueState state = queue.getStatus().getState();
-                if (DistributionQueueState.BLOCKED.equals(state)) {
-                    return DistributionAgentState.BLOCKED;
-                }
-
-                if (DistributionQueueState.RUNNING.equals(state)) {
-                    agentState = DistributionAgentState.RUNNING;
-                }
+            if (DistributionQueueState.RUNNING.equals(state)) {
+                agentState = DistributionAgentState.RUNNING;
             }
         }
 
@@ -313,16 +313,8 @@ public class SimpleDistributionAgent implements DistributionAgent {
 
         if (!isPassive()) {
             try {
-
-                Set<String> allQueues = new HashSet<String>(queueDistributionStrategy.getQueueNames());
-
-                if (passiveQueues != null) {
-                    Set<String> passiveQueues = new HashSet<String>(Arrays.asList(this.passiveQueues));
-                    allQueues.removeAll(passiveQueues);
-                }
-
-                queueProvider.enableQueueProcessing(new PackageQueueProcessor(), allQueues.toArray(new String[0]));
-            } catch (DistributionQueueException e) {
+                queueProvider.enableQueueProcessing(new PackageQueueProcessor(), processingQueues.toArray(new String[processingQueues.size()]));
+            } catch (DistributionException e) {
                 log.error("cannot enable queue processing", e);
             }
         }
@@ -336,8 +328,10 @@ public class SimpleDistributionAgent implements DistributionAgent {
         }
 
         try {
+            log.info("enabling trigger {}", trigger);
+
             trigger.register(agentBasedRequestHandler);
-        } catch (DistributionTriggerException e) {
+        } catch (DistributionException e) {
             log.error("could not register handler from trigger {} {}", trigger, e);
         }
 
@@ -349,8 +343,10 @@ public class SimpleDistributionAgent implements DistributionAgent {
         }
 
         try {
+            log.info("disabling trigger {}", trigger);
+
             trigger.unregister(agentBasedRequestHandler);
-        } catch (DistributionTriggerException e) {
+        } catch (DistributionException e) {
             log.error("could not unregister handler from trigger {} {}", trigger, e);
         }
     }
@@ -366,17 +362,19 @@ public class SimpleDistributionAgent implements DistributionAgent {
 
             try {
                 queueProvider.disableQueueProcessing();
-            } catch (DistributionQueueException e) {
+            } catch (DistributionException e) {
                 log.error("cannot disable queue processing", e);
             }
         }
 
     }
 
-    private boolean processQueueItem(String queueName, DistributionQueueItem queueItem) {
+    private boolean processQueueItem(String queueName, DistributionQueueEntry queueEntry) throws DistributionException {
         boolean success = false;
         ResourceResolver agentResourceResolver = null;
         DistributionPackage distributionPackage = null;
+        DistributionQueueItem queueItem = queueEntry.getItem();
+        DistributionQueueItemStatus queueItemStatus = queueEntry.getStatus();
         try {
 
             agentResourceResolver = getAgentResourceResolver();
@@ -384,24 +382,23 @@ public class SimpleDistributionAgent implements DistributionAgent {
             distributionPackage = distributionPackageExporter.getPackage(agentResourceResolver, queueItem.getId());
 
             if (distributionPackage != null) {
-                distributionPackage.getInfo().putAll(queueItem);
-                distributionPackage.getInfo().put(DistributionPackageInfo.PROPERTY_ORIGIN_QUEUE, queueName);
+                DistributionPackageUtils.mergeQueueEntry(distributionPackage.getInfo(), queueEntry);
 
+                if (processPackage(agentResourceResolver, distributionPackage)) {
+                    success = true;
+                    DistributionPackageUtils.releaseOrDelete(distributionPackage, queueName);
+                    generatePackageEvent(DistributionEventTopics.AGENT_PACKAGE_DISTRIBUTED, distributionPackage);
+                } else if (errorQueueStrategy != null && queueItemStatus.getAttempts() > retryAttempts) {
+                    success = reEnqueuePackage(distributionPackage);
+                    DistributionPackageUtils.releaseOrDelete(distributionPackage, queueName);
+                }
 
-                distributionPackageImporter.importPackage(agentResourceResolver, distributionPackage);
-
-                DistributionPackageUtils.releaseOrDelete(distributionPackage, queueName);
-
-                generatePackageEvent(DistributionEventTopics.AGENT_PACKAGE_DISTRIBUTED, distributionPackage);
-                success = true;
-                log.info("distribution package {} was delivered", queueItem.getId());
+                log.info("processed package {} with info {} from queue {}", distributionPackage.getId(), distributionPackage.getInfo(), queueName);
             } else {
                 success = true; // return success if package does not exist in order to clear the queue.
                 log.error("distribution package with id {} does not exist. the package will be skipped.", queueItem.getId());
             }
 
-        } catch (DistributionPackageImportException e) {
-            log.error("could not deliver package {}", queueItem.getId(), e);
         } catch (LoginException e) {
             log.info("cannot obtain resource resolver", e);
         } finally {
@@ -411,6 +408,35 @@ public class SimpleDistributionAgent implements DistributionAgent {
             }
         }
         return success;
+    }
+
+    private boolean processPackage(ResourceResolver resourceResolver, DistributionPackage distributionPackage) {
+        try {
+            distributionPackageImporter.importPackage(resourceResolver, distributionPackage);
+        } catch (DistributionException e) {
+            log.error("could not deliver package {}", distributionPackage.getId(), e);
+            return false;
+        }
+
+        log.debug("distribution package {} was delivered", distributionPackage.getId());
+        return true;
+    }
+
+    private boolean reEnqueuePackage(DistributionPackage distributionPackage) {
+
+        if (errorQueueStrategy == null) {
+            return false;
+        }
+
+        try {
+            errorQueueStrategy.add(distributionPackage, queueProvider);
+        } catch (DistributionException e) {
+            log.error("could not reenqueue package {}", distributionPackage.getId(), e);
+            return false;
+        }
+
+        log.info("distribution package {} was reenqueued", distributionPackage.getId());
+        return true;
     }
 
     private ResourceResolver getAgentResourceResolver() throws LoginException {
@@ -430,8 +456,7 @@ public class SimpleDistributionAgent implements DistributionAgent {
                 resourceResolver.commit();
             } catch (PersistenceException e) {
                 log.error("cannot commit changes to resource resolver", e);
-            }
-            finally {
+            } finally {
                 resourceResolver.close();
             }
         }
@@ -473,8 +498,8 @@ public class SimpleDistributionAgent implements DistributionAgent {
 
         for (String path : request.getPaths()) {
             boolean allowed = false;
-            for (String allowedRoot: allowedRoots) {
-                if(allowedRoot != null && allowedRoot.trim().length() != 0
+            for (String allowedRoot : allowedRoots) {
+                if (allowedRoot != null && allowedRoot.trim().length() != 0
                         && path.startsWith(allowedRoot)) {
                     allowed = true;
                 }
@@ -495,7 +520,7 @@ public class SimpleDistributionAgent implements DistributionAgent {
             try {
                 log.debug("queue {} processing item {}", queueName, queueItem);
 
-                boolean success = processQueueItem(queueName, queueItem);
+                boolean success = processQueueItem(queueName, queueEntry);
 
                 log.debug("queue {} processing item {} ended with status {}", queueName, queueItem, success);
 
@@ -526,16 +551,13 @@ public class SimpleDistributionAgent implements DistributionAgent {
             try {
                 agentResourceResolver = getAgentResourceResolver();
                 agent.execute(agentResourceResolver, request);
-            } catch (DistributionAgentException e) {
+            } catch (Throwable e) {
                 log.error("Error executing handler", e);
-            } catch (LoginException e) {
-                log.info("Cannot obtain resource resolver", e);
             } finally {
                 ungetAgentResourceResolver(agentResourceResolver);
             }
         }
     }
-
 
 
     /* Convert the state of a certain item in the queue into a request state */

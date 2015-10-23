@@ -28,10 +28,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.commons.io.IOUtils;
-import org.apache.http.Header;
-import org.apache.http.HttpEntity;
 import org.apache.http.HttpHost;
-import org.apache.http.HttpResponse;
 import org.apache.http.client.fluent.Content;
 import org.apache.http.client.fluent.Executor;
 import org.apache.http.client.fluent.Request;
@@ -41,25 +38,28 @@ import org.apache.http.entity.ContentType;
 import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.distribution.DistributionRequest;
 import org.apache.sling.distribution.DistributionRequestType;
+import org.apache.sling.distribution.DistributionException;
 import org.apache.sling.distribution.log.impl.DefaultDistributionLog;
-import org.apache.sling.distribution.packaging.DistributionPackage;
-import org.apache.sling.distribution.packaging.DistributionPackageInfo;
+import org.apache.sling.distribution.serialization.DistributionPackage;
+import org.apache.sling.distribution.serialization.DistributionPackageInfo;
 import org.apache.sling.distribution.serialization.DistributionPackageBuilder;
-import org.apache.sling.distribution.servlet.ServletJsonUtils;
+import org.apache.sling.distribution.transport.DistributionTransportSecret;
 import org.apache.sling.distribution.transport.DistributionTransportSecretProvider;
 import org.apache.sling.distribution.transport.core.DistributionTransport;
-import org.apache.sling.distribution.transport.core.DistributionTransportException;
-import org.apache.sling.distribution.transport.DistributionTransportSecret;
 import org.apache.sling.distribution.util.RequestUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
+/**
+ * default HTTP implementation of {@link DistributionTransport}
+ */
 public class SimpleHttpDistributionTransport implements DistributionTransport {
-
 
     private static final String USERNAME = "username";
     private static final String PASSWORD = "password";
 
+    /**
+     * distribution package origin uri
+     */
+    public static String PACKAGE_INFO_PROPERTY_ORIGIN_URI = "internal.origin.uri";
 
     protected final DefaultDistributionLog log;
     private final DistributionEndpoint distributionEndpoint;
@@ -79,10 +79,11 @@ public class SimpleHttpDistributionTransport implements DistributionTransport {
         this.maxPullItems = maxPullItems;
     }
 
-    public void deliverPackage(@Nonnull ResourceResolver resourceResolver, @Nonnull DistributionPackage distributionPackage) throws DistributionTransportException {
+    public void deliverPackage(@Nonnull ResourceResolver resourceResolver, @Nonnull DistributionPackage distributionPackage) throws DistributionException {
         String hostAndPort = getHostAndPort(distributionEndpoint.getUri());
 
-        URI packageOrigin = distributionPackage.getInfo().getOrigin();
+        URI packageOrigin = distributionPackage.getInfo().get(PACKAGE_INFO_PROPERTY_ORIGIN_URI, URI.class);
+
         if (packageOrigin != null && hostAndPort.equals(getHostAndPort(packageOrigin))) {
             log.info("skipping distribution of package {} to same origin {}", distributionPackage.getId(), hostAndPort);
         } else {
@@ -93,11 +94,9 @@ public class SimpleHttpDistributionTransport implements DistributionTransport {
 
                 DistributionTransportSecret secret = secretProvider.getSecret(distributionEndpoint.getUri());
 
-                log.info("delivering package {} to {} with user {}", new Object[]{
-                        distributionPackage.getId(),
+                log.info("delivering package {} to {} with user {}", distributionPackage.getId(),
                         distributionEndpoint.getUri(),
-                        secret.asCredentialsMap().get(USERNAME)
-                });
+                        secret.asCredentialsMap().get(USERNAME));
 
                 executor = authenticate(secret, executor);
 
@@ -115,13 +114,11 @@ public class SimpleHttpDistributionTransport implements DistributionTransport {
                 }
 
                 Content content = response.returnContent();
-                log.info("delivered package {} of type {} with paths {}", new Object[]{
-                        distributionPackage.getId(),
+                log.info("delivered package {} of type {} with paths {}", distributionPackage.getId(),
                         distributionPackage.getType(),
-                        Arrays.toString(distributionPackage.getInfo().getPaths()),
-                });
-            } catch (Exception ex) {
-                throw new DistributionTransportException(ex);
+                        Arrays.toString(distributionPackage.getInfo().getPaths()));
+            } catch (Throwable ex) {
+                throw new DistributionException(ex);
             }
         }
 
@@ -129,7 +126,7 @@ public class SimpleHttpDistributionTransport implements DistributionTransport {
 
     @Nonnull
     public List<DistributionPackage> retrievePackages(@Nonnull ResourceResolver resourceResolver, @Nonnull DistributionRequest
-            distributionRequest) throws DistributionTransportException {
+            distributionRequest) throws DistributionException {
         log.debug("pulling from {}", distributionEndpoint.getUri());
         List<DistributionPackage> result = new ArrayList<DistributionPackage>();
 
@@ -144,7 +141,7 @@ public class SimpleHttpDistributionTransport implements DistributionTransport {
             DistributionTransportSecret secret = secretProvider.getSecret(distributionEndpoint.getUri());
             executor = authenticate(secret, executor);
 
-            Request req = Request.Post(distributionURI).useExpectContinue();
+//            Request req = Request.Post(distributionURI).useExpectContinue();
 
             // TODO : add queue parameter
 
@@ -159,7 +156,7 @@ public class SimpleHttpDistributionTransport implements DistributionTransport {
 
                 final DistributionPackage responsePackage = packageBuilder.readPackage(resourceResolver, inputStream);
                 if (responsePackage != null) {
-                    responsePackage.getInfo().put(DistributionPackageInfo.PROPERTY_ORIGIN_URI, distributionURI);
+                    responsePackage.getInfo().put(PACKAGE_INFO_PROPERTY_ORIGIN_URI, distributionURI);
                     log.debug("pulled package no {} with info {}", pulls, responsePackage.getInfo());
 
                     result.add(responsePackage);

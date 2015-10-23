@@ -19,20 +19,19 @@
 package org.apache.sling.distribution.trigger.impl;
 
 import javax.annotation.Nonnull;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 
 import org.apache.sling.commons.scheduler.ScheduleOptions;
 import org.apache.sling.commons.scheduler.Scheduler;
 import org.apache.sling.distribution.DistributionRequestType;
 import org.apache.sling.distribution.SimpleDistributionRequest;
+import org.apache.sling.distribution.DistributionException;
 import org.apache.sling.distribution.trigger.DistributionRequestHandler;
 import org.apache.sling.distribution.trigger.DistributionTrigger;
-import org.apache.sling.distribution.trigger.DistributionTriggerException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Set;
 
 /**
  * {@link org.apache.sling.distribution.trigger.DistributionTrigger} to schedule distributions on a certain
@@ -53,7 +52,6 @@ public class ScheduledDistributionTrigger implements DistributionTrigger {
     private Set<String> registeredJobs = Collections.synchronizedSet(new HashSet<String>());
 
 
-
     public ScheduledDistributionTrigger(String distributionActionName, String path, int secondsInterval, Scheduler scheduler) {
         this.distributionAction = DistributionRequestType.fromName(distributionActionName);
         this.path = path;
@@ -72,7 +70,7 @@ public class ScheduledDistributionTrigger implements DistributionTrigger {
         }
     }
 
-    public void register(@Nonnull DistributionRequestHandler requestHandler) throws DistributionTriggerException {
+    public void register(@Nonnull DistributionRequestHandler requestHandler) throws DistributionException {
         try {
             ScheduleOptions options = scheduler.NOW(-1, secondsInterval);
             String jobName = getJobName(requestHandler);
@@ -89,11 +87,11 @@ public class ScheduledDistributionTrigger implements DistributionTrigger {
             log.info("handler registered {} {}", jobName, success);
 
         } catch (Exception e) {
-            throw new DistributionTriggerException("unable to register handler " + requestHandler, e);
+            throw new DistributionException("unable to register handler " + requestHandler, e);
         }
     }
 
-    public void unregister(@Nonnull DistributionRequestHandler requestHandler) throws DistributionTriggerException {
+    public void unregister(@Nonnull DistributionRequestHandler requestHandler) throws DistributionException {
         String jobName = getJobName(requestHandler);
 
         boolean success = scheduler.unschedule(jobName);

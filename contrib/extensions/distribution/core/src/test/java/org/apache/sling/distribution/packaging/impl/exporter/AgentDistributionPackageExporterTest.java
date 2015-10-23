@@ -24,7 +24,7 @@ import org.apache.sling.distribution.DistributionRequest;
 import org.apache.sling.distribution.DistributionRequestType;
 import org.apache.sling.distribution.SimpleDistributionRequest;
 import org.apache.sling.distribution.agent.DistributionAgent;
-import org.apache.sling.distribution.packaging.DistributionPackage;
+import org.apache.sling.distribution.serialization.DistributionPackage;
 import org.apache.sling.distribution.serialization.DistributionPackageBuilderProvider;
 import org.junit.Test;
 
@@ -39,7 +39,7 @@ public class AgentDistributionPackageExporterTest {
     @Test
     public void testTestExport() throws Exception {
         AgentDistributionPackageExporter distributionPackageExporter = new AgentDistributionPackageExporter(null,
-                mock(DistributionAgent.class), mock(DistributionPackageBuilderProvider.class));
+                mock(DistributionAgent.class), mock(DistributionPackageBuilderProvider.class), null);
         ResourceResolver resourceResolver = mock(ResourceResolver.class);
         DistributionRequest distributionRequest = new SimpleDistributionRequest(DistributionRequestType.TEST, null);
         List<DistributionPackage> distributionPackages = distributionPackageExporter.exportPackages(resourceResolver, distributionRequest);
