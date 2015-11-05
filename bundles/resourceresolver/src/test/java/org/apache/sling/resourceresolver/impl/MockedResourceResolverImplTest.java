@@ -42,12 +42,14 @@ import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.api.resource.ResourceResolverFactory;
 import org.apache.sling.api.resource.ValueMap;
 import org.apache.sling.api.wrappers.ValueMapDecorator;
+import org.apache.sling.resourceresolver.impl.observation.ResourceChangeListenerWhiteboard;
 import org.apache.sling.resourceresolver.impl.providers.ResourceProviderHandler;
 import org.apache.sling.resourceresolver.impl.providers.ResourceProviderInfo;
 import org.apache.sling.resourceresolver.impl.providers.ResourceProviderStorage;
 import org.apache.sling.resourceresolver.impl.providers.ResourceProviderTracker;
 import org.apache.sling.spi.resource.provider.JCRQueryProvider;
-import org.apache.sling.spi.resource.provider.ResolveContext;
+import org.apache.sling.spi.resource.provider.ResolverContext;
+import org.apache.sling.spi.resource.provider.ResourceContext;
 import org.apache.sling.spi.resource.provider.ResourceProvider;
 import org.junit.After;
 import org.junit.Assert;
@@ -63,8 +65,6 @@ import org.osgi.framework.Constants;
 import org.osgi.framework.ServiceFactory;
 import org.osgi.framework.ServiceReference;
 import org.osgi.service.component.ComponentContext;
-import org.osgi.service.event.Event;
-import org.osgi.service.event.EventAdmin;
 
 /**
  * This tests the ResourceResolver using mocks. The Unit test is in addition to
@@ -100,6 +100,9 @@ public class MockedResourceResolverImplTest {
     @Mock
     private ResourceProviderTracker resourceProviderTracker;
 
+    @Mock
+    private ResourceChangeListenerWhiteboard resourceChangeListenerWhiteboard;
+
     @SuppressWarnings("rawtypes")
     @Mock
     private JCRQueryProvider queryProvider;
@@ -124,7 +127,7 @@ public class MockedResourceResolverImplTest {
      */
     @Mock
     private ResourceProvider<?> appsResourceProvider;
-    
+
     /**
      * QueriableResourceProviders
      */
@@ -147,6 +150,7 @@ public class MockedResourceResolverImplTest {
 
         activator.resourceAccessSecurityTracker = new ResourceAccessSecurityTracker();
         activator.resourceProviderTracker = resourceProviderTracker;
+        activator.changeListenerWhiteboard = resourceChangeListenerWhiteboard;
 
         handlers.add(createRPHandler(resourceProvider, "org.apache.sling.resourceresolver.impl.DummyTestProvider", 10L, "/single"));
 
@@ -202,7 +206,7 @@ public class MockedResourceResolverImplTest {
 
     public static ResourceProviderHandler createRPHandler(ResourceProvider<?> rp, String pid, long ranking,
             String path) {
-        ServiceReference ref = Mockito.mock(ServiceReference.class);        
+        ServiceReference ref = Mockito.mock(ServiceReference.class);
         BundleContext bc = Mockito.mock(BundleContext.class);
         Mockito.when(bc.getService(Mockito.eq(ref))).thenReturn(rp);
         Mockito.when(ref.getProperty(Mockito.eq(Constants.SERVICE_ID))).thenReturn(new Random().nextLong());
@@ -214,14 +218,9 @@ public class MockedResourceResolverImplTest {
         Mockito.when(ref.getProperty(Mockito.eq(ResourceProvider.PROPERTY_ADAPTABLE))).thenReturn(true);
 
         ResourceProviderInfo info = new ResourceProviderInfo(ref);
-        return new ResourceProviderHandler(bc, info, new EventAdmin() {
-            @Override
-            public void sendEvent(Event event) {
-            }
-            @Override
-            public void postEvent(Event event) {
-            }
-        });
+        final ResourceProviderHandler handler = new ResourceProviderHandler(bc, info);
+        handler.activate();
+        return handler;
     }
 
     @SuppressWarnings("unchecked")
@@ -239,7 +238,7 @@ public class MockedResourceResolverImplTest {
         mappingChildren.add(buildResource(path+"/http/localhost_any", localHostAnyList, resourceResolver, provider,"sling:match", "localhost\\.\\d*", "sling:internalRedirect", "/content"));
 
         Resource etcMapResource = buildResource(path+"/http", mappingChildren);
-        Mockito.when(provider.getResource(Mockito.any(ResolveContext.class), Mockito.eq(path), Mockito.any(Resource.class))).thenReturn(etcMapResource);
+        Mockito.when(provider.getResource(Mockito.any(ResolverContext.class), Mockito.eq(path), Mockito.any(ResourceContext.class), Mockito.any(Resource.class))).thenReturn(etcMapResource);
         return etcMapResource;
     }
 
@@ -269,7 +268,7 @@ public class MockedResourceResolverImplTest {
     private Resource buildResource(String fullpath, Iterable<Resource> children) {
         return buildResource(fullpath, children, null, null, new String[0]);
     }
-    
+
     /** Build a List of ValueMap */
     private List<ValueMap> buildValueMapCollection(int howMany, String pathPrefix) {
         final List<ValueMap> result = new ArrayList<ValueMap>();
@@ -300,8 +299,8 @@ public class MockedResourceResolverImplTest {
 
         // register the resource with the provider
         if ( provider != null ) {
-            Mockito.when(provider.listChildren(Mockito.any(ResolveContext.class), Mockito.eq(resource))).thenReturn(children.iterator());
-            Mockito.when(provider.getResource(Mockito.any(ResolveContext.class), Mockito.eq(fullpath), Mockito.any(Resource.class))).thenReturn(resource);
+            Mockito.when(provider.listChildren(Mockito.any(ResolverContext.class), Mockito.eq(resource))).thenReturn(children.iterator());
+            Mockito.when(provider.getResource(Mockito.any(ResolverContext.class), Mockito.eq(fullpath), Mockito.any(ResourceContext.class), Mockito.any(Resource.class))).thenReturn(resource);
         }
         if ( properties != null ) {
             ValueMap vm = new SimpleValueMapImpl();
@@ -548,8 +547,8 @@ public class MockedResourceResolverImplTest {
     public void testQueryResources() throws LoginException {
         final int n = 3;
         String[] languages = new String[] {FAKE_QUERY_LANGUAGE};
-        Mockito.when(queryProvider.getSupportedLanguages(Mockito.any(ResolveContext.class))).thenReturn(languages);
-        Mockito.when(queryProvider.queryResources(Mockito.any(ResolveContext.class), Mockito.any(String.class), Mockito.any(String.class)))
+        Mockito.when(queryProvider.getSupportedLanguages(Mockito.any(ResolverContext.class))).thenReturn(languages);
+        Mockito.when(queryProvider.queryResources(Mockito.any(ResolverContext.class), Mockito.any(String.class), Mockito.any(String.class)))
         .thenReturn(buildValueMapCollection(n, "A_").iterator());
 
         final ResourceResolver rr = resourceResolverFactory.getResourceResolver(null);

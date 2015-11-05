@@ -137,8 +137,8 @@ public abstract class AbstractSingleInstanceTest {
         instance.bindPropertyProvider(pp, propertyName);
 
         instance.heartbeatsAndCheckView();
-        // wait 100ms for the vote to happen
-        Thread.sleep(100);
+        // wait 1000ms for the vote to happen
+        Thread.sleep(1000);
         assertEquals(propertyValue,
                 instance.getClusterViewService().getLocalClusterView()
                         .getInstances().get(0).getProperty(propertyName));
@@ -164,6 +164,7 @@ public abstract class AbstractSingleInstanceTest {
         instance.heartbeatsAndCheckView();
         
         final String propertyValue = UUID.randomUUID().toString();
+        Thread.sleep(2000);
         doTestProperty(UUID.randomUUID().toString(), propertyValue, propertyValue);
 
         doTestProperty("", propertyValue, null);
@@ -201,7 +202,7 @@ public abstract class AbstractSingleInstanceTest {
         assertingTopologyEventListener.addExpected(Type.TOPOLOGY_INIT);
         logger.info("testTopologyEventListeners: binding the event listener");
         instance.bindTopologyEventListener(assertingTopologyEventListener);
-        Thread.sleep(500); // SLING-4755: async event sending requires some minimal wait time nowadays
+        Thread.sleep(1000); // SLING-4755: async event sending requires some minimal wait time nowadays
         assertEquals(0, assertingTopologyEventListener.getRemainingExpectedCount());
 
         final String propertyName = UUID.randomUUID().toString();
@@ -275,7 +276,9 @@ public abstract class AbstractSingleInstanceTest {
         Thread.sleep(1000);
         instance.heartbeatsAndCheckView();
         Thread.sleep(1000);
+        logger.info("testBoostrap: dumping repo...");
         instance.dumpRepo();
+        logger.info("testBoostrap: dumping listener...");
         ada.dump();
         assertEquals(0, ada.getUnexpectedCount());
         assertEquals(1, ada.getEvents().size());

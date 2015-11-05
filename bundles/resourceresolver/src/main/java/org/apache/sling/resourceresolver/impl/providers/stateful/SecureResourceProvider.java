@@ -19,7 +19,6 @@
 package org.apache.sling.resourceresolver.impl.providers.stateful;
 
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 
 import org.apache.sling.api.resource.PersistenceException;
@@ -27,7 +26,6 @@ import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.security.ResourceAccessSecurity;
 import org.apache.sling.resourceresolver.impl.ResourceAccessSecurityTracker;
 import org.apache.sling.resourceresolver.impl.ResourceResolverImpl;
-import org.apache.sling.spi.resource.provider.ResourceProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,28 +48,28 @@ public class SecureResourceProvider extends StatefulResourceProviderWrapper {
     }
 
     @Override
-    public Resource create(final String path, Map<String, Object> properties, List<StatefulResourceProvider> parentProviders) throws PersistenceException {
+    public Resource create(final String path, Map<String, Object> properties) throws PersistenceException {
         if (isAllowed(new SecurityTest() {
             @Override
             public boolean isAllowed(ResourceAccessSecurity security) {
                 return security.canCreate(path, getResourceResolver());
             }
         })) {
-            return rp.create(path, properties, parentProviders);
+            return rp.create(path, properties);
         } else {
             return null;
         }
     }
 
     @Override
-    public void delete(final Resource resource, List<StatefulResourceProvider> parentProviders) throws PersistenceException {
+    public void delete(final Resource resource) throws PersistenceException {
         if (isAllowed(new SecurityTest() {
             @Override
             public boolean isAllowed(ResourceAccessSecurity security) {
                 return security.canDelete(resource);
             }
         })) {
-            rp.delete(resource, parentProviders);
+            rp.delete(resource);
         }
     }
 

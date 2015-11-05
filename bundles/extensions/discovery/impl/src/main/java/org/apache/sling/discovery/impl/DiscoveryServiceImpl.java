@@ -61,10 +61,10 @@ import org.apache.sling.discovery.commons.providers.DefaultClusterView;
 import org.apache.sling.discovery.commons.providers.DefaultInstanceDescription;
 import org.apache.sling.discovery.commons.providers.ViewStateManager;
 import org.apache.sling.discovery.commons.providers.base.ViewStateManagerFactory;
-import org.apache.sling.discovery.commons.providers.spi.ConsistencyService;
-import org.apache.sling.discovery.commons.providers.spi.base.IdMapService;
+import org.apache.sling.discovery.commons.providers.spi.ClusterSyncService;
 import org.apache.sling.discovery.commons.providers.util.PropertyNameHelper;
 import org.apache.sling.discovery.commons.providers.util.ResourceHelper;
+import org.apache.sling.discovery.impl.cluster.ClusterViewServiceImpl;
 import org.apache.sling.discovery.impl.common.heartbeat.HeartbeatHandler;
 import org.apache.sling.settings.SlingSettingsService;
 import org.osgi.framework.BundleContext;
@@ -121,14 +121,11 @@ public class DiscoveryServiceImpl extends BaseDiscoveryService {
     private ConnectorRegistry connectorRegistry;
 
     @Reference
-    private ClusterViewService clusterViewService;
+    private ClusterViewServiceImpl clusterViewService;
 
     @Reference
     private Config config;
     
-    @Reference
-    private IdMapService idMapService;
-
     /** the slingId of the local instance **/
     private String slingId;
 
@@ -142,7 +139,7 @@ public class DiscoveryServiceImpl extends BaseDiscoveryService {
     public static BaseDiscoveryService testConstructor(ResourceResolverFactory resourceResolverFactory, 
             AnnouncementRegistry announcementRegistry, 
             ConnectorRegistry connectorRegistry,
-            ClusterViewService clusterViewService,
+            ClusterViewServiceImpl clusterViewService,
             HeartbeatHandler heartbeatHandler,
             SlingSettingsService settingsService,
             Scheduler scheduler,
@@ -161,7 +158,7 @@ public class DiscoveryServiceImpl extends BaseDiscoveryService {
 
     public DiscoveryServiceImpl() {
         viewStateManagerLock = new ReentrantLock();
-        final ConsistencyService consistencyService = new ConsistencyService() {
+        final ClusterSyncService consistencyService = new ClusterSyncService() {
 
             @Override
             public void sync(BaseTopologyView view, Runnable callback) {
@@ -368,7 +365,7 @@ public class DiscoveryServiceImpl extends BaseDiscoveryService {
         this.providerInfos.add(info);
         Collections.sort(this.providerInfos);
         this.doUpdateProperties();
-        handlePotentialTopologyChange();
+        checkForTopologyChange();
     }
 
     /**
@@ -407,7 +404,7 @@ public class DiscoveryServiceImpl extends BaseDiscoveryService {
         final ProviderInfo info = new ProviderInfo(propertyProvider, props);
         if ( this.providerInfos.remove(info) && update ) {
             this.doUpdateProperties();
-            this.handlePotentialTopologyChange();
+            this.checkForTopologyChange();
         }
     }
 
@@ -511,7 +508,7 @@ public class DiscoveryServiceImpl extends BaseDiscoveryService {
             logger.debug("updateProperties: calling doUpdateProperties.");
             doUpdateProperties();
             logger.debug("updateProperties: calling handlePotentialTopologyChange.");
-            handlePotentialTopologyChange();
+            checkForTopologyChange();
             logger.debug("updateProperties: done.");
         }
     }
@@ -594,20 +591,21 @@ public class DiscoveryServiceImpl extends BaseDiscoveryService {
     }
 
     /**
-     * Handle the fact that the topology has likely changed
+     * Check the current topology for any potential change
      */
-    public void handlePotentialTopologyChange() {
+    public void checkForTopologyChange() {
         viewStateManagerLock.lock();
         try{
             if (!activated) {
-                logger.debug("handlePotentialTopologyChange: not yet activated, ignoring");
+                logger.debug("checkForTopologyChange: not yet activated, ignoring");
                 return;
             }
-            BaseTopologyView t = (BaseTopologyView) getTopology();
+            DefaultTopologyView t = (DefaultTopologyView) getTopology();
             if (t.isCurrent()) {
                 // if we have a valid view, let the viewStateManager do the
                 // comparison and sending of an event, if necessary
                 viewStateManager.handleNewView(t);
+                setOldView(t);
             } else {
                 // if we don't have a view, then we might have to send
                 // a CHANGING event, let that be decided by the viewStateManager as well
@@ -653,6 +651,10 @@ public class DiscoveryServiceImpl extends BaseDiscoveryService {
         return clusterViewService;
     }
     
+    public ClusterViewServiceImpl getClusterViewServiceImpl() {
+        return clusterViewService;
+    }
+
     protected AnnouncementRegistry getAnnouncementRegistry() {
         return announcementRegistry;
     }

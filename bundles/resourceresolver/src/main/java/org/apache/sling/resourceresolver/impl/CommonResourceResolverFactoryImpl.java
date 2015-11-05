@@ -265,7 +265,7 @@ public class CommonResourceResolverFactoryImpl implements ResourceResolverFactor
     protected void activate(final BundleContext bundleContext) {
         final Logger logger = LoggerFactory.getLogger(getClass());
         try {
-            plugin = new ResourceResolverWebConsolePlugin(bundleContext, this);
+            plugin = new ResourceResolverWebConsolePlugin(bundleContext, this, this.activator.getRuntimeService());
         } catch (final Throwable ignore) {
             // an exception here probably means the web console plugin is not
             // available
@@ -351,7 +351,7 @@ public class CommonResourceResolverFactoryImpl implements ResourceResolverFactor
     public long getMaxCachedVanityPathEntries() {
         return this.activator.getMaxCachedVanityPathEntries();
     }
-    
+
     @Override
     public boolean isMaxCachedVanityPathEntriesStartup() {
         return this.activator.isMaxCachedVanityPathEntriesStartup();
@@ -405,6 +405,10 @@ public class CommonResourceResolverFactoryImpl implements ResourceResolverFactor
         return logResourceResolverClosing;
     }
 
+    public ResourceProviderTracker getResourceProviderTracker() {
+        return activator.getResourceProviderTracker();
+    }
+
     /**
      * Extension of a weak reference to be able to get the context object
      * that is used for cleaning up.
@@ -423,9 +427,5 @@ public class CommonResourceResolverFactoryImpl implements ResourceResolverFactor
         public void close() {
             this.context.close();
         }
-    }
-
-    public ResourceProviderTracker getResourceProviderTracker() {
-        return activator.getResourceProviderTracker();
     }
 }

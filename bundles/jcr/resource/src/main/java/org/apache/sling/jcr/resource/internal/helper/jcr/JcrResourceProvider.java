@@ -66,7 +66,9 @@ import org.apache.sling.jcr.resource.internal.NodeUtil;
 import org.apache.sling.jcr.resource.internal.OakResourceListener;
 import org.apache.sling.jcr.resource.internal.ObservationListenerSupport;
 import org.apache.sling.spi.resource.provider.JCRQueryProvider;
-import org.apache.sling.spi.resource.provider.ResolveContext;
+import org.apache.sling.spi.resource.provider.ProviderContext;
+import org.apache.sling.spi.resource.provider.ResolverContext;
+import org.apache.sling.spi.resource.provider.ResourceContext;
 import org.apache.sling.spi.resource.provider.ResourceProvider;
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.ServiceReference;
@@ -158,8 +160,7 @@ public class JcrResourceProvider extends ResourceProvider<JcrProviderState> {
         this.optimizeForOak = PropertiesUtil.toBoolean(context.getProperties().get(PROPERTY_OPTIMIZE_FOR_OAK), DEFAULT_OPTIMIZE_FOR_OAK);
         this.root = PropertiesUtil.toString(context.getProperties().get(ResourceProvider.PROPERTY_ROOT), "/");
         this.bundleCtx = context.getBundleContext();
-        registerLegacyListener();
-        
+
         HelperData helperData = new HelperData(dynamicClassLoaderManager.getDynamicClassLoader(), pathMapper);
         this.stateFactory = new JcrProviderStateFactory(repositoryReference, repository, helperData);
     }
@@ -167,6 +168,19 @@ public class JcrResourceProvider extends ResourceProvider<JcrProviderState> {
     @Deactivate
     protected void deactivate() {
         unregisterLegacyListener();
+    }
+
+
+    @Override
+    public void start(final ProviderContext ctx) {
+        super.start(ctx);
+        registerLegacyListener();
+    }
+
+    @Override
+    public void stop() {
+        unregisterLegacyListener();
+        super.stop();
     }
 
     @SuppressWarnings("unused")
@@ -199,7 +213,7 @@ public class JcrResourceProvider extends ResourceProvider<JcrProviderState> {
         ObservationListenerSupport support = null;
         boolean closeSupport = true;
         try {
-            support = new ObservationListenerSupport(bundleCtx, repository);
+            support = new ObservationListenerSupport(bundleCtx, repository, this.getProviderContext().getExcludedPaths());
             if (isOak) {
                 try {
                     this.listener = new OakResourceListener(root, support, bundleCtx, executor, pathMapper, observationQueueLength);
@@ -245,26 +259,26 @@ public class JcrResourceProvider extends ResourceProvider<JcrProviderState> {
     }
 
     @Override
-    public void logout(final @Nonnull JcrProviderState state) {
-        state.logout();
+    public void logout(final @Nonnull ResolverContext<JcrProviderState> ctx) {
+        ctx.getProviderState().logout();
     }
 
     @Override
-    public boolean isLive(final @Nonnull ResolveContext<JcrProviderState> ctx) {
+    public boolean isLive(final @Nonnull ResolverContext<JcrProviderState> ctx) {
         return ctx.getProviderState().getSession().isLive();
     }
 
     @Override
-    public Resource getResource(ResolveContext<JcrProviderState> ctx, String path, Resource parent) {
+    public Resource getResource(ResolverContext<JcrProviderState> ctx, String path, ResourceContext rCtx, Resource parent) {
         try {
-            return ctx.getProviderState().getResourceFactory().createResource(ctx.getResourceResolver(), path, parent, ctx.getResolveParameters());
+            return ctx.getProviderState().getResourceFactory().createResource(ctx.getResourceResolver(), path, parent, rCtx.getResolveParameters());
         } catch (RepositoryException e) {
             throw new SlingException("Can't get resource", e);
         }
     }
 
     @Override
-    public Iterator<Resource> listChildren(ResolveContext<JcrProviderState> ctx, Resource parent) {
+    public Iterator<Resource> listChildren(ResolverContext<JcrProviderState> ctx, Resource parent) {
         JcrItemResource<?> parentItemResource;
 
         // short cut for known JCR resources
@@ -289,12 +303,12 @@ public class JcrResourceProvider extends ResourceProvider<JcrProviderState> {
     }
 
     @Override
-    public @CheckForNull Resource getParent(final @Nonnull ResolveContext<JcrProviderState> ctx, final @Nonnull Resource child) {
+    public @CheckForNull Resource getParent(final @Nonnull ResolverContext<JcrProviderState> ctx, final @Nonnull Resource child) {
         if (child instanceof JcrItemResource<?>) {
             try {
                 String version = null;
-                if (ctx.getResolveParameters() != null) {
-                    version = ctx.getResolveParameters().get("v");
+                if (child.getResourceMetadata().getParameterMap() != null) {
+                    version = child.getResourceMetadata().getParameterMap().get("v");
                 }
                 if (version == null) {
                     Item item = ((JcrItemResource<?>) child).getItem();
@@ -320,7 +334,7 @@ public class JcrResourceProvider extends ResourceProvider<JcrProviderState> {
     }
 
     @Override
-    public Collection<String> getAttributeNames(final @Nonnull ResolveContext<JcrProviderState> ctx) {
+    public Collection<String> getAttributeNames(final @Nonnull ResolverContext<JcrProviderState> ctx) {
         final Set<String> names = new HashSet<String>();
         final String[] sessionNames = ctx.getProviderState().getSession().getAttributeNames();
         for(final String name : sessionNames) {
@@ -332,7 +346,7 @@ public class JcrResourceProvider extends ResourceProvider<JcrProviderState> {
     }
 
     @Override
-    public Object getAttribute(final @Nonnull ResolveContext<JcrProviderState> ctx, final @Nonnull String name) {
+    public Object getAttribute(final @Nonnull ResolverContext<JcrProviderState> ctx, final @Nonnull String name) {
         if (isAttributeVisible(name)) {
             if (ResourceResolverFactory.USER.equals(name)) {
                 return ctx.getProviderState().getSession().getUserID();
@@ -343,7 +357,7 @@ public class JcrResourceProvider extends ResourceProvider<JcrProviderState> {
     }
 
     @Override
-    public Resource create(final @Nonnull ResolveContext<JcrProviderState> ctx, final String path, final Map<String, Object> properties)
+    public Resource create(final @Nonnull ResolverContext<JcrProviderState> ctx, final String path, final Map<String, Object> properties)
     throws PersistenceException {
         // check for node type
         final Object nodeObj = (properties != null ? properties.get(NodeUtil.NODE_TYPE) : null);
@@ -422,7 +436,7 @@ public class JcrResourceProvider extends ResourceProvider<JcrProviderState> {
     }
 
     @Override
-    public void delete(final @Nonnull ResolveContext<JcrProviderState> ctx, final @Nonnull Resource resource)
+    public void delete(final @Nonnull ResolverContext<JcrProviderState> ctx, final @Nonnull Resource resource)
     throws PersistenceException {
         try {
             ((JcrItemResource<?>) resource).getItem().remove();
@@ -432,16 +446,16 @@ public class JcrResourceProvider extends ResourceProvider<JcrProviderState> {
     }
 
     @Override
-    public void revert(final @Nonnull ResolveContext<JcrProviderState> ctx) {
+    public void revert(final @Nonnull ResolverContext<JcrProviderState> ctx) {
         try {
             ctx.getProviderState().getSession().refresh(false);
         } catch (final RepositoryException ignore) {
             log.warn("Unable to revert pending changes.", ignore);
         }
     }
-    
+
     @Override
-    public void commit(final @Nonnull ResolveContext<JcrProviderState> ctx)
+    public void commit(final @Nonnull ResolverContext<JcrProviderState> ctx)
     throws PersistenceException {
         try {
             ctx.getProviderState().getSession().save();
@@ -451,7 +465,7 @@ public class JcrResourceProvider extends ResourceProvider<JcrProviderState> {
     }
 
     @Override
-    public boolean hasChanges(final @Nonnull ResolveContext<JcrProviderState> ctx) {
+    public boolean hasChanges(final @Nonnull ResolverContext<JcrProviderState> ctx) {
         try {
             return ctx.getProviderState().getSession().hasPendingChanges();
         } catch (final RepositoryException ignore) {
@@ -461,7 +475,7 @@ public class JcrResourceProvider extends ResourceProvider<JcrProviderState> {
     }
 
     @Override
-    public void refresh(final @Nonnull ResolveContext<JcrProviderState> ctx) {
+    public void refresh(final @Nonnull ResolverContext<JcrProviderState> ctx) {
         try {
             ctx.getProviderState().getSession().refresh(true);
         } catch (final RepositoryException ignore) {
@@ -471,7 +485,7 @@ public class JcrResourceProvider extends ResourceProvider<JcrProviderState> {
 
     @SuppressWarnings("unchecked")
     @Override
-    public @CheckForNull <AdapterType> AdapterType adaptTo(final @Nonnull ResolveContext<JcrProviderState> ctx,
+    public @CheckForNull <AdapterType> AdapterType adaptTo(final @Nonnull ResolverContext<JcrProviderState> ctx,
             final @Nonnull Class<AdapterType> type) {
         Session session = ctx.getProviderState().getSession();
         if (type == Session.class) {
@@ -497,29 +511,33 @@ public class JcrResourceProvider extends ResourceProvider<JcrProviderState> {
     }
 
     @Override
-    public boolean copy(final  @Nonnull ResolveContext<JcrProviderState> ctx,
+    public boolean copy(final  @Nonnull ResolverContext<JcrProviderState> ctx,
             final String srcAbsPath,
             final String destAbsPath) throws PersistenceException {
         return false;
     }
 
     @Override
-    public boolean move(final  @Nonnull ResolveContext<JcrProviderState> ctx,
+    public boolean move(final  @Nonnull ResolverContext<JcrProviderState> ctx,
             final String srcAbsPath,
             final String destAbsPath) throws PersistenceException {
         final String srcNodePath = pathMapper.mapResourcePathToJCRPath(srcAbsPath);
-        final String dstNodePath = pathMapper.mapResourcePathToJCRPath(destAbsPath);
+        final String dstNodePath = pathMapper.mapResourcePathToJCRPath(destAbsPath + '/' + ResourceUtil.getName(srcAbsPath));
         try {
             ctx.getProviderState().getSession().move(srcNodePath, dstNodePath);
             return true;
-        } catch (RepositoryException e) {
-            throw new PersistenceException("Can't move resource", e);
+        } catch (final RepositoryException e) {
+            throw new PersistenceException("Unable to move resource to " + destAbsPath, e, srcAbsPath, null);
         }
     }
-    
+
     @Override
     public @CheckForNull JCRQueryProvider<JcrProviderState> getJCRQueryProvider() {
-        return new BasicJcrQueryProvider();
+        final ProviderContext ctx = this.getProviderContext();
+        if ( ctx != null ) {
+            return new BasicJcrQueryProvider(ctx);
+        }
+        return null;
     }
 
     /**

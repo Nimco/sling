@@ -18,25 +18,16 @@
  */
 package org.apache.sling.discovery.commons.providers.base;
 
-import org.apache.sling.discovery.TopologyEvent;
-import org.apache.sling.discovery.TopologyEventListener;
+/**
+ * An AsyncEvent can be enqueued to the AsyncEventSender for
+ * later, asynchronous triggering
+ */
+public interface AsyncEvent {
 
-/** SLING-4755 : encapsulates an event that yet has to be sent (asynchronously) for a particular listener **/
-final class AsyncEvent {
-    final TopologyEventListener listener;
-    final TopologyEvent event;
-    AsyncEvent(TopologyEventListener listener, TopologyEvent event) {
-        if (listener==null) {
-            throw new IllegalArgumentException("listener must not be null");
-        }
-        if (event==null) {
-            throw new IllegalArgumentException("event must not be null");
-        }
-        this.listener = listener;
-        this.event = event;
-    }
-    @Override
-    public String toString() {
-        return "an AsyncEvent[event="+event+", listener="+listener+"]";
-    }
+    /**
+     * As soon as this AsyncEvent is at the front of AsyncEventSender's
+     * FIFO queue it will be invoked via this trigger() method.
+     */
+    void trigger();
+    
 }

@@ -56,12 +56,12 @@ public class OakDiscoveryServiceTest {
         }
 
         @Override
-        public long getBgTimeoutMillis() {
+        public long getClusterSyncServiceTimeoutMillis() {
             return bgTimeoutMillis;
         }
 
         @Override
-        public long getBgIntervalMillis() {
+        public long getClusterSyncServiceIntervalMillis() {
             return bgIntervalMillis;
         }
 
@@ -103,13 +103,13 @@ public class OakDiscoveryServiceTest {
         discoBuilder.setFinal(true);
         DescriptorHelper.setDiscoveryLiteDescriptor(builder.getResourceResolverFactory(), 
                 discoBuilder);
-        discoveryService.handlePotentialTopologyChange();
-        assertTrue(discoveryService.getViewStateManager().waitForAsyncEvents(2000));
+        discoveryService.checkForTopologyChange();
+        assertEquals(0, discoveryService.getViewStateManager().waitForAsyncEvents(2000));
         assertEquals(1, listener.countEvents());
         discoveryService.unbindTopologyEventListener(listener);
         assertEquals(1, listener.countEvents());
         discoveryService.bindTopologyEventListener(listener);
-        assertTrue(discoveryService.getViewStateManager().waitForAsyncEvents(2000));
+        assertEquals(0, discoveryService.getViewStateManager().waitForAsyncEvents(2000));
         assertEquals(2, listener.countEvents()); // should now have gotten an INIT too
     }
     

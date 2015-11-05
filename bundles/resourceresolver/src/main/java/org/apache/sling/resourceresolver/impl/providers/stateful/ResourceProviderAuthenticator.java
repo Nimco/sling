@@ -24,25 +24,33 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.sling.api.SlingException;
+import javax.annotation.Nonnull;
+
 import org.apache.sling.api.resource.LoginException;
 import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.api.resource.runtime.dto.AuthType;
 import org.apache.sling.resourceresolver.impl.ResourceAccessSecurityTracker;
 import org.apache.sling.resourceresolver.impl.providers.ResourceProviderHandler;
 import org.apache.sling.spi.resource.provider.ResourceProvider;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
+/**
+ * The authenticator is a per resource resolver instance.
+ * It keeps track of the used providers, especially the authenticated providers.
+ *
+ * This class is not thread safe (same as the resource resolver).
+ */
 public class ResourceProviderAuthenticator {
 
-    private static final Logger logger = LoggerFactory.getLogger(ResourceProviderAuthenticator.class);
+    /** Set of authenticated resource providers. */
+    private final List<StatefulResourceProvider> authenticated = new ArrayList<StatefulResourceProvider>();
+
+    /** Set of modifiable resource providers. */
+    private final List<StatefulResourceProvider> modifiable = new ArrayList<StatefulResourceProvider>();
+
+    /** Set of refreshable resource providers. */
+    private final List<StatefulResourceProvider> refreshable = new ArrayList<StatefulResourceProvider>();
 
     private final Map<ResourceProviderHandler, StatefulResourceProvider> stateful;
-
-    private final List<StatefulResourceProvider> authenticated;
-
-    private final List<StatefulResourceProvider> authenticatedModifiable;
 
     private final ResourceResolver resolver;
 
@@ -55,43 +63,60 @@ public class ResourceProviderAuthenticator {
     public ResourceProviderAuthenticator(ResourceResolver resolver, Map<String, Object> authInfo,
             ResourceAccessSecurityTracker securityTracker) throws LoginException {
         this.stateful = new IdentityHashMap<ResourceProviderHandler, StatefulResourceProvider>();
-        this.authenticated = new ArrayList<StatefulResourceProvider>();
-        this.authenticatedModifiable = new ArrayList<StatefulResourceProvider>();
         this.resolver = resolver;
         this.authInfo = authInfo;
         this.securityTracker = securityTracker;
     }
 
-    public void authenticateAll(List<ResourceProviderHandler> handlers) throws LoginException {
-        for (ResourceProviderHandler h : handlers) {
-            authenticate(h);
+    /**
+     * Authenticate all handlers
+     * @param handlers
+     * @param combinedProvider
+     * @throws LoginException
+     */
+    public void authenticateAll(final List<ResourceProviderHandler> handlers,
+                                final CombinedResourceProvider combinedProvider)
+    throws LoginException {
+        final List<StatefulResourceProvider> successfulHandlers = new ArrayList<StatefulResourceProvider>();
+        for (final ResourceProviderHandler h : handlers) {
+            try {
+                successfulHandlers.add(authenticate(h, combinedProvider));
+            } catch ( final LoginException le ) {
+                // logout from all successful handlers
+                for(final StatefulResourceProvider handler : successfulHandlers) {
+                    handler.logout();
+                }
+                throw le;
+            }
         }
     }
 
-    private StatefulResourceProvider authenticate(ResourceProviderHandler handler) throws LoginException {
+    private @Nonnull StatefulResourceProvider authenticate(final ResourceProviderHandler handler,
+            CombinedResourceProvider combinedProvider) throws LoginException {
         StatefulResourceProvider rp = stateful.get(handler);
         if (rp == null) {
-            rp = createStateful(handler);
-            if (rp == null) {
-                return null;
-            }
+            rp = createStateful(handler, combinedProvider);
             stateful.put(handler, rp);
             if (handler.getInfo().getAuthType() != AuthType.no) {
                 authenticated.add(rp);
             }
-            if (handler.getInfo().getModifiable()) {
-                authenticatedModifiable.add(rp);
+            if (handler.getInfo().isModifiable()) {
+                modifiable.add(rp);
+            }
+            if (handler.getInfo().isRefreshable()) {
+                refreshable.add(rp);
             }
         }
         return rp;
     }
 
-    public StatefulResourceProvider getStateful(ResourceProviderHandler handler) {
-        try {
-            return authenticate(handler);
-        } catch (LoginException e) {
-            throw new SlingException("Can't authenticate provider", e);
-        }
+    public Collection<StatefulResourceProvider> getAllUsed() {
+        return stateful.values();
+    }
+
+    public @Nonnull StatefulResourceProvider getStateful(ResourceProviderHandler handler, CombinedResourceProvider combinedProvider)
+    throws LoginException {
+        return authenticate(handler, combinedProvider);
     }
 
     public Collection<StatefulResourceProvider> getAllUsedAuthenticated() {
@@ -99,25 +124,31 @@ public class ResourceProviderAuthenticator {
     }
 
     public Collection<StatefulResourceProvider> getAllUsedModifiable() {
-        return authenticatedModifiable;
+        return modifiable;
     }
 
-    public Collection<StatefulResourceProvider> getAll(List<ResourceProviderHandler> handlers) {
+    public Collection<StatefulResourceProvider> getAllUsedRefreshable() {
+        return refreshable;
+    }
+
+    public Collection<StatefulResourceProvider> getAllBestEffort(List<ResourceProviderHandler> handlers,
+            CombinedResourceProvider combinedProvider) {
         List<StatefulResourceProvider> result = new ArrayList<StatefulResourceProvider>(handlers.size());
         for (ResourceProviderHandler h : handlers) {
-            result.add(getStateful(h));
+            try {
+                result.add(getStateful(h, combinedProvider));
+            } catch ( final LoginException le) {
+                // ignore
+            }
         }
         return result;
     }
 
-    private StatefulResourceProvider createStateful(ResourceProviderHandler handler) throws LoginException {
-        ResourceProvider<?> rp = handler.getResourceProvider();
-        if (rp == null) {
-            logger.warn("Empty resource provider for {}", handler);
-            return null;
-        }
+    private @Nonnull StatefulResourceProvider createStateful(ResourceProviderHandler handler,
+            CombinedResourceProvider combinedProvider) throws LoginException {
+        final ResourceProvider<?> rp = handler.getResourceProvider();
         StatefulResourceProvider authenticated;
-        authenticated = new AuthenticatedResourceProvider(rp, handler.getInfo(), resolver, authInfo);
+        authenticated = new AuthenticatedResourceProvider(rp, handler.getInfo(), resolver, authInfo, combinedProvider);
         if (handler.getInfo().getUseResourceAccessSecurity()) {
             authenticated = new SecureResourceProvider(authenticated, securityTracker);
         }

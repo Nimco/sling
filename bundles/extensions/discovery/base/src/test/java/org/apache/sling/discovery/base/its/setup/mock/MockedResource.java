@@ -33,6 +33,7 @@ import javax.jcr.PropertyIterator;
 import javax.jcr.PropertyType;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
+import javax.jcr.Value;
 
 import org.apache.sling.api.resource.ModifiableValueMap;
 import org.apache.sling.api.resource.SyntheticResource;
@@ -123,7 +124,7 @@ public class MockedResource extends SyntheticResource {
                 ValueMap valueMap = new ValueMapDecorator(map);
                 return (AdapterType) valueMap;
             } catch (Exception e) {
-                e.printStackTrace();
+                logger.error("adaptTo failed with : "+e);
                 return null;
             }
         } else if (type.equals(ModifiableValueMap.class)) {
@@ -193,6 +194,8 @@ public class MockedResource extends SyntheticResource {
                             node.setProperty(arg0, c);
                         } else if (arg1 instanceof Long) {
                             node.setProperty(arg0, (Long)arg1);
+                        } else if (arg1 == null) {
+                            node.setProperty(arg0, (Value)null);
                         } else {
                             throw new UnsupportedOperationException();
                         }

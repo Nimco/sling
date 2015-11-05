@@ -26,6 +26,9 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -37,6 +40,7 @@ import java.util.Map;
 import javax.jcr.Session;
 import javax.servlet.http.HttpServletRequest;
 
+import org.apache.sling.api.SlingException;
 import org.apache.sling.api.resource.LoginException;
 import org.apache.sling.api.resource.NonExistingResource;
 import org.apache.sling.api.resource.PersistenceException;
@@ -47,11 +51,11 @@ import org.apache.sling.api.resource.SyntheticResource;
 import org.apache.sling.resourceresolver.impl.providers.ResourceProviderHandler;
 import org.apache.sling.resourceresolver.impl.providers.ResourceProviderStorage;
 import org.apache.sling.resourceresolver.impl.providers.ResourceProviderTracker;
-import org.apache.sling.spi.resource.provider.ResolveContext;
+import org.apache.sling.spi.resource.provider.ResolverContext;
+import org.apache.sling.spi.resource.provider.ResourceContext;
 import org.apache.sling.spi.resource.provider.ResourceProvider;
 import org.junit.Before;
 import org.junit.Test;
-import org.mockito.Mockito;
 import org.mockito.internal.util.reflection.Whitebox;
 
 public class ResourceResolverImplTest {
@@ -61,27 +65,27 @@ public class ResourceResolverImplTest {
     private ResourceResolver resResolver;
 
     private ResourceResolverFactoryImpl resFac;
-    
+
     private ResourceProviderTracker resourceProviderTracker;
 
     @Before public void setup() throws LoginException {
         ResourceProvider<?> rp = new ResourceProvider<Object>() {
 
             @Override
-            public Resource getResource(ResolveContext<Object> ctx, String path, Resource parent) {
+            public Resource getResource(ResolverContext<Object> ctx, String path, ResourceContext rCtx, Resource parent) {
                 return null;
             }
 
             @Override
-            public Iterator<Resource> listChildren(ResolveContext<Object> ctx, Resource parent) {
+            public Iterator<Resource> listChildren(ResolverContext<Object> ctx, Resource parent) {
                 return null;
             }
         };
 
         List<ResourceProviderHandler> handlers = asList(createRPHandler(rp, "rp1", 0, "/"));
-        resourceProviderTracker = Mockito.mock(ResourceProviderTracker.class);
+        resourceProviderTracker = mock(ResourceProviderTracker.class);
         ResourceProviderStorage storage = new ResourceProviderStorage(handlers);
-        Mockito.when(resourceProviderTracker.getResourceProviderStorage()).thenReturn(storage);
+        when(resourceProviderTracker.getResourceProviderStorage()).thenReturn(storage);
         ResourceResolverFactoryActivator activator = new ResourceResolverFactoryActivator();
         activator.resourceProviderTracker = resourceProviderTracker;
         commonFactory = new CommonResourceResolverFactoryImpl(activator);
@@ -197,9 +201,10 @@ public class ResourceResolverImplTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testCloseWithStackTraceLogging() throws Exception {
-        ResourceResolverFactoryActivator rrfa = Mockito.spy(new ResourceResolverFactoryActivator());
+        ResourceResolverFactoryActivator rrfa = spy(new ResourceResolverFactoryActivator());
         Whitebox.setInternalState(rrfa, "logResourceResolverClosing", true);
         CommonResourceResolverFactoryImpl crrfi = new CommonResourceResolverFactoryImpl(rrfa);
         final ResourceResolver rr = new ResourceResolverImpl(crrfi, false, null, resourceProviderTracker.getResourceProviderStorage());
@@ -350,10 +355,10 @@ public class ResourceResolverImplTest {
         assertEquals("Path must be the original path", no_resource_path,
                 res0.getPath());
 
-        final HttpServletRequest req1 = Mockito.mock(HttpServletRequest.class);
-        Mockito.when(req1.getProtocol()).thenReturn("http");
-        Mockito.when(req1.getServerName()).thenReturn("localhost");
-        Mockito.when(req1.getPathInfo()).thenReturn(no_resource_path);
+        final HttpServletRequest req1 = mock(HttpServletRequest.class);
+        when(req1.getProtocol()).thenReturn("http");
+        when(req1.getServerName()).thenReturn("localhost");
+        when(req1.getPathInfo()).thenReturn(no_resource_path);
 
         final Resource res1 = resResolver.resolve(req1);
         assertNotNull("Expecting resource if resolution fails", res1);
@@ -362,10 +367,10 @@ public class ResourceResolverImplTest {
         assertEquals("Path must be the original path", no_resource_path,
                 res1.getPath());
 
-        final HttpServletRequest req2 = Mockito.mock(HttpServletRequest.class);
-        Mockito.when(req2.getProtocol()).thenReturn("http");
-        Mockito.when(req2.getServerName()).thenReturn("localhost");
-        Mockito.when(req2.getPathInfo()).thenReturn(null);
+        final HttpServletRequest req2 = mock(HttpServletRequest.class);
+        when(req2.getProtocol()).thenReturn("http");
+        when(req2.getServerName()).thenReturn("localhost");
+        when(req2.getPathInfo()).thenReturn(null);
         final Resource res2 = resResolver.resolve(req2);
         assertNotNull("Expecting resource if resolution fails", res2);
         assertTrue("Resource must be NonExistingResource",
@@ -457,8 +462,8 @@ public class ResourceResolverImplTest {
     }
 
     @Test public void testBasicCrud() throws Exception {
-        final Resource r = Mockito.mock(Resource.class);
-        Mockito.when(r.getPath()).thenReturn("/some");
+        final Resource r = mock(Resource.class);
+        when(r.getPath()).thenReturn("/some");
         try {
             this.resResolver.create(null, "a", null);
             fail("Null parent resource should throw NPE");
@@ -485,62 +490,23 @@ public class ResourceResolverImplTest {
         }
     }
 
-    @Test public void test_getResourceSuperType() throws LoginException {
-        // the resource resolver
-        final List<ResourceResolver> resolvers = new ArrayList<ResourceResolver>();
-        final PathBasedResourceResolverImpl resolver = new PathBasedResourceResolverImpl(
-                new CommonResourceResolverFactoryImpl(new ResourceResolverFactoryActivator()) {
-
-                    @Override
-                    public ResourceResolver getAdministrativeResourceResolver(
-                            Map<String, Object> authenticationInfo)
-                            throws LoginException {
-                        return resolvers.get(0);
-                    }
-                }, resourceProviderTracker);
-        resolvers.add(resolver);
+    @Test public void test_getResourceSuperType() {
+        final PathBasedResourceResolverImpl resolver = getPathBasedResourceResolver();
 
         // the resources to test
-        final Resource r = Mockito.mock(Resource.class);
-        Mockito.when(r.getResourceType()).thenReturn("a:b");
-        final Resource r2 = Mockito.mock(Resource.class);
-        Mockito.when(r2.getResourceType()).thenReturn("a:c");
-        final Resource typeResource = Mockito.mock(Resource.class);
-        Mockito.when(typeResource.getResourceType()).thenReturn("x:y");
-        Mockito.when(typeResource.getResourceSuperType()).thenReturn("t:c");
-
-        resolver.setResource("/a", r);
-        resolver.setResource("/a/b", typeResource);
+        final Resource r = resolver.add(new SyntheticResource(resolver, "/a", "a:b"));
+        final Resource r2 = resolver.add(new SyntheticResource(resolver, "/a2", "a:c"));
+        resolver.add(new SyntheticResourceWithSupertype(resolver, "/a/b", "x:y", "t:c"));
 
         assertEquals("t:c", resolver.getParentResourceType(r.getResourceType()));
         assertNull(resolver.getParentResourceType(r2.getResourceType()));
     }
 
-    @Test public void test_isA() throws LoginException {
-        final Resource typeResource = Mockito.mock(Resource.class);
-        Mockito.when(typeResource.getResourceType()).thenReturn("x:y");
-        Mockito.when(typeResource.getResourceSuperType()).thenReturn("t:c");
-
-        final List<ResourceResolver> resolvers = new ArrayList<ResourceResolver>();
-        final PathBasedResourceResolverImpl resolver = new PathBasedResourceResolverImpl(
-                new CommonResourceResolverFactoryImpl(new ResourceResolverFactoryActivator()) {
-
-                    @Override
-                    public ResourceResolver getAdministrativeResourceResolver(
-                            Map<String, Object> authenticationInfo)
-                            throws LoginException {
-                        return resolvers.get(0);
-                    }
-                }, resourceProviderTracker);
-        resolvers.add(resolver);
-        final Resource r = new SyntheticResource(resolver, "/a", "a:b") {
-            @Override
-            public String getResourceSuperType() {
-                return "d:e";
-            }
-        };
-        resolver.setResource("/a", r);
-        resolver.setResource("/d/e", typeResource);
+    @Test public void testIsResourceType() {
+        final PathBasedResourceResolverImpl resolver = getPathBasedResourceResolver();
+        
+        final Resource r = resolver.add(new SyntheticResourceWithSupertype(resolver, "/a", "a:b", "d:e"));
+        resolver.add(new SyntheticResourceWithSupertype(resolver, "/d/e", "x:y", "t:c"));
 
         assertTrue(resolver.isResourceType(r, "a:b"));
         assertTrue(resolver.isResourceType(r, "d:e"));
@@ -549,16 +515,118 @@ public class ResourceResolverImplTest {
         assertFalse(resolver.isResourceType(r, "h:p"));
     }
 
+    @Test public void testIsResourceTypeWithPaths() {
+        final PathBasedResourceResolverImpl resolver = getPathBasedResourceResolver();
+        
+        /**
+         * prepare resource type hierarchy
+         * /types/1
+         *  +- /types/2
+         *    +- /types/3
+         */
+        resolver.add(new SyntheticResourceWithSupertype(resolver, "/types/1", "/types/component", "/types/2"));
+        resolver.add(new SyntheticResourceWithSupertype(resolver, "/types/2", "/types/component", "/types/3"));
+        resolver.add(new SyntheticResource(resolver, "/types/3", "/types/component"));
+
+        Resource resourceT1 = resolver.add(new SyntheticResource(resolver, "/resourceT1", "/types/1"));
+        Resource resourceT2 = resolver.add(new SyntheticResource(resolver, "/resourceT2", "/types/2"));
+        Resource resourceT3 = resolver.add(new SyntheticResource(resolver, "/resourceT3", "/types/3"));
+
+        assertTrue(resolver.isResourceType(resourceT1, "/types/1"));
+        assertTrue(resolver.isResourceType(resourceT1, "/types/2"));
+        assertTrue(resolver.isResourceType(resourceT1, "/types/3"));
+        assertFalse(resolver.isResourceType(resourceT1, "/types/component"));
+        assertFalse(resolver.isResourceType(resourceT1, "/types/unknown"));
+
+        assertFalse(resolver.isResourceType(resourceT2, "/types/1"));
+        assertTrue(resolver.isResourceType(resourceT2, "/types/2"));
+        assertTrue(resolver.isResourceType(resourceT2, "/types/3"));
+        assertFalse(resolver.isResourceType(resourceT2, "/types/component"));
+        assertFalse(resolver.isResourceType(resourceT2, "/types/unknown"));
+
+        assertFalse(resolver.isResourceType(resourceT3, "/types/1"));
+        assertFalse(resolver.isResourceType(resourceT3, "/types/2"));
+        assertTrue(resolver.isResourceType(resourceT3, "/types/3"));
+        assertFalse(resolver.isResourceType(resourceT3, "/types/component"));
+        assertFalse(resolver.isResourceType(resourceT3, "/types/unknown"));
+    }
+
+    @Test(expected=SlingException.class)  public void testIsResourceCyclicHierarchyDirect() {
+        final PathBasedResourceResolverImpl resolver = getPathBasedResourceResolver();
+        
+        /**
+         * prepare resource type hierarchy
+         * /types/1  <---+
+         *  +- /types/2 -+
+         */
+        resolver.add(new SyntheticResourceWithSupertype(resolver, "/types/1", "/types/component", "/types/2"));
+        resolver.add(new SyntheticResourceWithSupertype(resolver, "/types/2", "/types/component", "/types/1"));
+
+        Resource resource = resolver.add(new SyntheticResource(resolver, "/resourceT1", "/types/1"));
+
+        assertTrue(resolver.isResourceType(resource, "/types/1"));
+        assertTrue(resolver.isResourceType(resource, "/types/2"));
+        
+        // this should throw a SlingException when detecting the cyclic hierarchy
+        resolver.isResourceType(resource, "/types/unknown");
+    }
+
+    @Test(expected=SlingException.class) public void testIsResourceCyclicHierarchyIndirect() {
+        final PathBasedResourceResolverImpl resolver = getPathBasedResourceResolver();
+        
+        /**
+         * prepare resource type hierarchy
+         * /types/1   <----+
+         *  +- /types/2    |
+         *    +- /types/3 -+
+         */
+        resolver.add(new SyntheticResourceWithSupertype(resolver, "/types/1", "/types/component", "/types/2"));
+        resolver.add(new SyntheticResourceWithSupertype(resolver, "/types/2", "/types/component", "/types/3"));
+        resolver.add(new SyntheticResourceWithSupertype(resolver, "/types/3", "/types/component", "/types/1"));
+
+        Resource resource = resolver.add(new SyntheticResource(resolver, "/resourceT1", "/types/1"));
+
+        assertTrue(resolver.isResourceType(resource, "/types/1"));
+        assertTrue(resolver.isResourceType(resource, "/types/2"));
+        assertTrue(resolver.isResourceType(resource, "/types/3"));
+
+        // this should throw a SlingException when detecting the cyclic hierarchy
+        resolver.isResourceType(resource, "/types/unknown");
+    }
+
+    private PathBasedResourceResolverImpl getPathBasedResourceResolver() {
+        try {
+            final List<ResourceResolver> resolvers = new ArrayList<ResourceResolver>();
+            final PathBasedResourceResolverImpl resolver = new PathBasedResourceResolverImpl(resolvers, resourceProviderTracker);
+            resolvers.add(resolver);
+            return resolver;
+        }
+        catch (LoginException ex) {
+            throw new RuntimeException(ex);
+        }
+    }
+
     private static class PathBasedResourceResolverImpl extends ResourceResolverImpl {
 
         private final Map<String, Resource> resources = new HashMap<String, Resource>();
 
+        public PathBasedResourceResolverImpl(final List<ResourceResolver> resolvers, final ResourceProviderTracker resourceProviderTracker) throws LoginException {
+            this(new CommonResourceResolverFactoryImpl(new ResourceResolverFactoryActivator()) {
+                @Override
+                public ResourceResolver getAdministrativeResourceResolver(
+                        Map<String, Object> authenticationInfo) throws LoginException {
+                    return resolvers.get(0);
+                }
+            }, resourceProviderTracker);            
+        }
+        
         public PathBasedResourceResolverImpl(CommonResourceResolverFactoryImpl factory, ResourceProviderTracker resourceProviderTracker) throws LoginException {
             super(factory, false, null, resourceProviderTracker.getResourceProviderStorage());
         }
 
-        public void setResource(final String path, final Resource r) {
-            this.resources.put(path, r);
+        public Resource add(final Resource r) {
+            this.resources.put(r.getPath(), r);
+            return r;
         }
 
         @Override
@@ -572,4 +640,22 @@ public class ResourceResolverImplTest {
             return this.resources.get(p);
         }
     }
+
+    private static class SyntheticResourceWithSupertype extends SyntheticResource {
+        
+        private final String resourceSuperType;
+        
+        public SyntheticResourceWithSupertype(ResourceResolver resourceResolver, String path,
+                String resourceType, String resourceSuperType) {
+            super(resourceResolver, path, resourceType);
+            this.resourceSuperType = resourceSuperType;
+        }
+     
+        @Override
+        public String getResourceSuperType() {
+            return this.resourceSuperType;
+        }
+        
+    }
+    
 }

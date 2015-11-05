@@ -182,8 +182,8 @@ public abstract class CommonTests {
         opt.add(mavenBundle("org.apache.servicemix.bundles", "org.apache.servicemix.bundles.concurrent", "1.3.4_1"));
 
         opt.add(mavenBundle("org.apache.geronimo.bundles", "commons-httpclient", "3.1_1"));
-        opt.add(mavenBundle("org.apache.tika", "tika-core", "1.9"));
-        opt.add(mavenBundle("org.apache.tika", "tika-bundle", "1.9"));
+        opt.add(mavenBundle("org.apache.tika", "tika-core", "1.10"));
+        opt.add(mavenBundle("org.apache.tika", "tika-bundle", "1.10"));
 
         opt.add(mavenBundle("org.apache.felix", "org.apache.felix.http.jetty", "2.2.2"));
         opt.add(mavenBundle("org.apache.felix", "org.apache.felix.eventadmin", "1.3.2"));
@@ -219,8 +219,8 @@ public abstract class CommonTests {
         opt.add(mavenBundle("org.apache.httpcomponents", "httpclient-osgi", "4.4.1"));
 
         opt.add(mavenBundle("org.apache.sling", "org.apache.sling.jcr.jcr-wrapper", "2.0.0"));
-        opt.add(mavenBundle("org.apache.sling", "org.apache.sling.jcr.api", "2.3.1-SNAPSHOT"));
-        opt.add(mavenBundle("org.apache.sling", "org.apache.sling.jcr.base", "2.3.1-SNAPSHOT"));
+        opt.add(mavenBundle("org.apache.sling", "org.apache.sling.jcr.api", "2.3.0"));
+        opt.add(mavenBundle("org.apache.sling", "org.apache.sling.jcr.base", "2.3.0"));
         
         opt.add(junitBundles());
         return opt;

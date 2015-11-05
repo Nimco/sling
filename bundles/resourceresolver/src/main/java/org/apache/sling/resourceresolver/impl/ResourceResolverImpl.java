@@ -23,10 +23,11 @@ import static org.apache.commons.lang.StringUtils.defaultString;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
-import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.StringTokenizer;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
@@ -50,6 +51,9 @@ import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.api.resource.ResourceResolverFactory;
 import org.apache.sling.api.resource.ResourceUtil;
 import org.apache.sling.api.resource.ResourceWrapper;
+import org.apache.sling.api.resource.query.Query;
+import org.apache.sling.api.resource.query.QueryInstructions;
+import org.apache.sling.api.resource.query.Result;
 import org.apache.sling.resourceresolver.impl.helper.RedirectResource;
 import org.apache.sling.resourceresolver.impl.helper.ResourceIteratorDecorator;
 import org.apache.sling.resourceresolver.impl.helper.ResourcePathIterator;
@@ -59,7 +63,6 @@ import org.apache.sling.resourceresolver.impl.helper.URI;
 import org.apache.sling.resourceresolver.impl.helper.URIException;
 import org.apache.sling.resourceresolver.impl.mapping.MapEntry;
 import org.apache.sling.resourceresolver.impl.params.ParsedParameters;
-import org.apache.sling.resourceresolver.impl.providers.ResourceProviderHandler;
 import org.apache.sling.resourceresolver.impl.providers.ResourceProviderStorage;
 import org.apache.sling.resourceresolver.impl.providers.stateful.CombinedResourceProvider;
 import org.apache.sling.resourceresolver.impl.providers.stateful.ResourceProviderAuthenticator;
@@ -115,10 +118,6 @@ public class ResourceResolverImpl extends SlingAdaptable implements ResourceReso
         this(factory, isAdmin, authenticationInfo, factory.getResourceProviderTracker().getResourceProviderStorage());
     }
 
-    ResourceResolverImpl(final CommonResourceResolverFactoryImpl factory, final boolean isAdmin, final Map<String, Object> authenticationInfo, final List<ResourceProviderHandler> handlers) throws LoginException {
-        this(factory, isAdmin, authenticationInfo, new ResourceProviderStorage(handlers));
-    }
-
     ResourceResolverImpl(final CommonResourceResolverFactoryImpl factory, final boolean isAdmin, final Map<String, Object> authenticationInfo, final ResourceProviderStorage storage) throws LoginException {
         this.factory = factory;
         this.authenticationInfo = authenticationInfo;
@@ -127,6 +126,12 @@ public class ResourceResolverImpl extends SlingAdaptable implements ResourceReso
         this.factory.register(this, context);
     }
 
+    /**
+     * Constructor for cloning the resource resolver
+     * @param resolver The resolver to clone
+     * @param authenticationInfo The auth info
+     * @throws LoginException if auth to a required provider fails
+     */
     private ResourceResolverImpl(final ResourceResolverImpl resolver, final Map<String, Object> authenticationInfo) throws LoginException {
         this.factory = resolver.factory;
         this.authenticationInfo = new HashMap<String, Object>();
@@ -143,8 +148,9 @@ public class ResourceResolverImpl extends SlingAdaptable implements ResourceReso
 
     private CombinedResourceProvider createProvider(ResourceProviderStorage storage) throws LoginException {
         final ResourceProviderAuthenticator authenticator = new ResourceProviderAuthenticator(this, authenticationInfo, this.factory.getResourceAccessSecurityTracker());
-        authenticator.authenticateAll(storage.getAuthRequiredHandlers());
-        return new CombinedResourceProvider(storage, this, authenticator);
+        final CombinedResourceProvider provider = new CombinedResourceProvider(storage, this, authenticator);
+        authenticator.authenticateAll(storage.getAuthRequiredHandlers(), provider);
+        return provider;
     }
 
     /**
@@ -241,8 +247,8 @@ public class ResourceResolverImpl extends SlingAdaptable implements ResourceReso
     /**
      * @see org.apache.sling.api.resource.ResourceResolver#resolve(javax.servlet.http.HttpServletRequest)
      */
+    @SuppressWarnings("deprecation")
     @Override
-    @SuppressWarnings("javadoc")
     public Resource resolve(final HttpServletRequest request) {
         checkClosed();
 
@@ -1265,12 +1271,17 @@ public class ResourceResolverImpl extends SlingAdaptable implements ResourceReso
              if (resourceType.equals(resource.getResourceType())) {
                  result = true;
              } else {
+                 Set<String> superTypesChecked = new HashSet<String>();
                  String superType = this.getParentResourceType(resource);
                  while (!result && superType != null) {
                      if (resourceType.equals(superType)) {
                          result = true;
                      } else {
+                         superTypesChecked.add(superType);
                          superType = this.getParentResourceType(superType);
+                         if (superType != null && superTypesChecked.contains(superType)) {
+                             throw new SlingException("Cyclic dependency for resourceSuperType hierarchy detected on resource " + resource.getPath(), null);
+                         }
                      }
                  }
              }
@@ -1293,16 +1304,22 @@ public class ResourceResolverImpl extends SlingAdaptable implements ResourceReso
     }
 
     @Override
-    public void copy(final String srcAbsPath, final String destAbsPath) throws PersistenceException {
-        if (!this.provider.copy(srcAbsPath, destAbsPath)) {
-            throw new UnsupportedOperationException();
-        }
+    public Resource copy(final String srcAbsPath, final String destAbsPath) throws PersistenceException {
+        return this.provider.copy(srcAbsPath, destAbsPath);
     }
 
     @Override
-    public void move(final String srcAbsPath, final String destAbsPath) throws PersistenceException {
-        if (!this.provider.move(srcAbsPath, destAbsPath)) {
-            throw new UnsupportedOperationException();
-        }
+    public Resource move(final String srcAbsPath, final String destAbsPath) throws PersistenceException {
+        return this.provider.move(srcAbsPath, destAbsPath);
+    }
+
+    /**
+     * Querying the resource providers
+     * @param q The query
+     * @param qi The query instructions
+     * @return An iterator for the result.
+     */
+    public Result find(final Query q, final QueryInstructions qi) {
+        return this.provider.find(q, qi);
     }
 }

@@ -18,8 +18,6 @@
  */
 package org.apache.sling.resourceresolver.impl.providers.stateful;
 
-import static org.apache.commons.collections.IteratorUtils.chainedIterator;
-import static org.apache.commons.collections.IteratorUtils.transformedIterator;
 import static org.apache.sling.api.resource.ResourceUtil.getName;
 import static org.apache.sling.spi.resource.provider.ResourceProvider.RESOURCE_TYPE_SYNTHETIC;
 
@@ -27,26 +25,30 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 
-import org.apache.commons.collections.IteratorUtils;
-import org.apache.commons.collections.ListUtils;
-import org.apache.commons.collections.Transformer;
+import javax.annotation.CheckForNull;
+import javax.annotation.Nonnull;
+
+import org.apache.commons.collections.iterators.IteratorChain;
 import org.apache.commons.lang.ArrayUtils;
-import org.apache.sling.api.SlingException;
+import org.apache.sling.api.resource.LoginException;
 import org.apache.sling.api.resource.PersistenceException;
 import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.api.resource.ResourceUtil;
 import org.apache.sling.api.resource.SyntheticResource;
+import org.apache.sling.api.resource.ValueMap;
 import org.apache.sling.api.resource.query.Query;
+import org.apache.sling.api.resource.query.Query.QueryType;
 import org.apache.sling.api.resource.query.QueryInstructions;
+import org.apache.sling.api.resource.query.Result;
 import org.apache.sling.resourceresolver.impl.providers.ResourceProviderHandler;
 import org.apache.sling.resourceresolver.impl.providers.ResourceProviderInfo;
 import org.apache.sling.resourceresolver.impl.providers.ResourceProviderStorage;
@@ -66,15 +68,15 @@ public class CombinedResourceProvider {
 
     private static final Logger logger = LoggerFactory.getLogger(CombinedResourceProvider.class);
 
-    private static final StatefulResourceProvider EMPTY_PROVIDER = new EmptyResourceProvider();
-
     private final ResourceProviderStorage storage;
 
     private final ResourceResolver resolver;
 
     private final ResourceProviderAuthenticator authenticator;
 
-    public CombinedResourceProvider(ResourceProviderStorage storage, ResourceResolver resolver, ResourceProviderAuthenticator authenticator) {
+    public CombinedResourceProvider(ResourceProviderStorage storage,
+            ResourceResolver resolver,
+            ResourceProviderAuthenticator authenticator) {
         this.storage = storage;
         this.resolver = resolver;
         this.authenticator = authenticator;
@@ -90,10 +92,10 @@ public class CombinedResourceProvider {
     }
 
     /**
-     * Refreshes all providers.
+     * Refreshes all refreshable providers.
      */
     public void refresh() {
-        for (StatefulResourceProvider p : authenticator.getAll(storage.getRefreshableHandlers())) {
+        for (StatefulResourceProvider p : authenticator.getAllUsedRefreshable()) {
             p.refresh();
         }
     }
@@ -113,19 +115,23 @@ public class CombinedResourceProvider {
     /**
      * Returns parent from the most appropriate resource provider accepting the
      * given children.
-     * 
+     *
      * In some cases the {@link SyntheticResource} can be returned if no
      * resource provider returns parent for this child. See
      * {@link #getResource(String, Resource, Map, boolean)} for more details
      */
     public Resource getParent(Resource child) {
-        String path = child.getPath();
-        List<StatefulResourceProvider> matching = getMatchingProviders(path);
-        Resource parentCandidate = head(matching).getParent(child, tail(matching));
-        if (parentCandidate != null) {
-            return parentCandidate;
+        final String path = child.getPath();
+        try {
+            final StatefulResourceProvider provider = getBestMatchingProvider(path);
+            final Resource parentCandidate = provider.getParent(child);
+            if (parentCandidate != null) {
+                return parentCandidate;
+            }
+        } catch ( final LoginException le ) {
+            // ignore
         }
-        String parentPath = ResourceUtil.getParent(path);
+        final String parentPath = ResourceUtil.getParent(path);
         if (parentPath != null && isIntermediatePath(parentPath)) {
             return new SyntheticResource(resolver, parentPath, ResourceProvider.RESOURCE_TYPE_SYNTHETIC);
         }
@@ -153,27 +159,24 @@ public class CombinedResourceProvider {
         }
 
         try {
-            List<StatefulResourceProvider> matching = getMatchingProviders(path);
-            Resource resourceCandidate = head(matching).getResource(path, parent, parameters, isResolve, tail(matching));
+            final StatefulResourceProvider provider = this.getBestMatchingProvider(path);
+            final Resource resourceCandidate = provider.getResource(path, parent, parameters, isResolve);
             if (resourceCandidate != null) {
                 return resourceCandidate;
             }
-
-            // query: /libs/sling/servlet/default
-            // resource Provider: libs/sling/servlet/default/GET.servlet
-            // list will match libs, sling, servlet, default
-            // and there will be no resource provider at the end
-            // SLING-3482 : this is only done for getResource but not resolve
-            //              as it is important e.g. for servlet resolution
-            //              to get the parent resource for resource traversal.
-            if (!isResolve && isIntermediatePath(path)) {
-                logger.debug("Resolved Synthetic {}", path);
-                return new SyntheticResource(resolver, path, ResourceProvider.RESOURCE_TYPE_SYNTHETIC);
-            }
-        } catch (SlingException e) {
-            throw e;
-        } catch (Exception e) {
-            logger.warn("Unexpected exception while trying to get resource for " + path, e);
+        } catch ( LoginException le ) {
+            // ignore
+        }
+        // query: /libs/sling/servlet/default
+        // resource Provider: libs/sling/servlet/default/GET.servlet
+        // list will match libs, sling, servlet, default
+        // and there will be no resource provider at the end
+        // SLING-3482 : this is only done for getResource but not resolve
+        //              as it is important e.g. for servlet resolution
+        //              to get the parent resource for resource traversal.
+        if (!isResolve && isIntermediatePath(path)) {
+            logger.debug("Resolved Synthetic {}", path);
+            return new SyntheticResource(resolver, path, ResourceProvider.RESOURCE_TYPE_SYNTHETIC);
         }
         logger.debug("Resource null {} ", path);
         return null;
@@ -193,46 +196,71 @@ public class CombinedResourceProvider {
      */
     @SuppressWarnings("unchecked")
     public Iterator<Resource> listChildren(final Resource parent) {
-        List<StatefulResourceProvider> matching = getMatchingProviders(parent.getPath());
-        Iterator<Resource> realChildren = head(matching).listChildren(parent, tail(matching));
-        Iterator<Resource> syntheticChildren = getSyntheticChildren(parent).iterator();
-        Iterator<Resource> allChildren;
-        if (realChildren == null) {
-            allChildren = syntheticChildren;
-        } else {
-            allChildren = new UniqueIterator(chainedIterator(realChildren, syntheticChildren));
-        } 
-        return transformedIterator(allChildren, new Transformer() {
-            @Override
-            public Object transform(Object input) {
-                Resource resource = (Resource) input;
-                resource.getResourceMetadata().setResolutionPath(resource.getPath());
-                return resource;
-            }
-        });
-    }
+        final String parentPath = parent.getPath();
 
-    private List<Resource> getSyntheticChildren(Resource parent) {
-        Node<ResourceProviderHandler> node = storage.getTree().getNode(parent.getPath());
-        if (node == null) {
-            return Collections.emptyList();
+        // 3 sources are combined: children of the provider which owns 'parent',
+        // providers which are directly mounted at a child path,
+        // synthetic resources for providers mounted at a lower level
+
+        // children of the 'parent' provider
+        Iterator<Resource> realChildren = null;
+        try {
+            final StatefulResourceProvider provider = this.getBestMatchingProvider(parentPath);
+            realChildren = provider.listChildren(parent);
+        } catch ( final LoginException le ) {
+            // ignore, realChildren will be null
         }
-        List<Resource> children = new ArrayList<Resource>();
-        for (Entry<String, Node<ResourceProviderHandler>> entry : node.getChildren().entrySet()) {
-            final String name = entry.getKey();
-            final ResourceProviderHandler handler = entry.getValue().getValue();
-            final String childPath = new StringBuilder(parent.getPath()).append('/').append(name).toString();
-            final Resource child;
-            if (handler == null) {
-                child = new SyntheticResource(resolver, childPath, RESOURCE_TYPE_SYNTHETIC);
-            } else { 
-                child = authenticator.getStateful(handler).getResource(childPath, parent, null, false, null);
+
+        final Set<String> visitedNames = new HashSet<String>();
+
+        IteratorChain chain = new IteratorChain();
+        if ( realChildren != null ) {
+            chain.addIterator(realChildren);
+        }
+
+        // synthetic and providers are done in one loop
+        final Node<ResourceProviderHandler> node = storage.getTree().getNode(parent.getPath());
+        if (node != null) {
+            final List<Resource> syntheticList = new ArrayList<Resource>();
+            final List<Resource> providerList = new ArrayList<Resource>();
+
+            for (final Entry<String, Node<ResourceProviderHandler>> entry : node.getChildren().entrySet()) {
+                final String name = entry.getKey();
+                final ResourceProviderHandler handler = entry.getValue().getValue();
+                final String childPath = new StringBuilder(parent.getPath()).append('/').append(name).toString();
+                if (handler == null) {
+                    syntheticList.add(new SyntheticResource(resolver, childPath, RESOURCE_TYPE_SYNTHETIC));
+                } else {
+                    Resource rsrc = null;
+                    try {
+                        rsrc = authenticator.getStateful(handler, this).getResource(childPath, parent, null, false);
+                    } catch ( final LoginException ignore) {
+                        // ignore
+                    }
+                    if ( rsrc != null ) {
+                        providerList.add(rsrc);
+                    } else {
+                        // if there is a child provider underneath, we need to create a synthetic resource
+                        // otherwise we need to make sure that no one else is providing this child
+                        if ( entry.getValue().getChildren().isEmpty() ) {
+                            syntheticList.add(new SyntheticResource(resolver, childPath, RESOURCE_TYPE_SYNTHETIC));
+                        } else {
+                            visitedNames.add(name);
+                        }
+                    }
+                }
             }
-            if (child != null) {
-                children.add(child);
+            if ( !providerList.isEmpty() ) {
+                chain.addIterator(providerList.iterator());
+            }
+            if ( !syntheticList.isEmpty() ) {
+                chain.addIterator(syntheticList.iterator());
             }
         }
-        return children;
+        if ( chain.size() == 0 ) {
+            return Collections.EMPTY_LIST.iterator();
+        }
+        return new UniqueIterator(visitedNames, chain);
     }
 
     /**
@@ -240,8 +268,8 @@ public class CombinedResourceProvider {
      */
     public Collection<String> getAttributeNames() {
         final Set<String> names = new LinkedHashSet<String>();
-        for (StatefulResourceProvider p : authenticator.getAll(storage.getAttributableHandlers())) {
-            Collection<String> newNames = p.getAttributeNames();
+        for (StatefulResourceProvider p : authenticator.getAllBestEffort(storage.getAttributableHandlers(), this)) {
+            final Collection<String> newNames = p.getAttributeNames();
             if (newNames != null) {
                 names.addAll(newNames);
             }
@@ -255,7 +283,7 @@ public class CombinedResourceProvider {
      * the providers.
      */
     public Object getAttribute(String name) {
-        for (StatefulResourceProvider p : authenticator.getAll(storage.getAttributableHandlers())) {
+        for (StatefulResourceProvider p : authenticator.getAllBestEffort(storage.getAttributableHandlers(), this)) {
             Object attribute = p.getAttribute(name);
             if (attribute != null) {
                 return attribute;
@@ -265,9 +293,7 @@ public class CombinedResourceProvider {
     }
 
     /**
-     * Create a resource. Iterate over all modifiable ResourceProviders
-     * stopping at the first one which creates the resource and return the
-     * created resource.
+     * Create a resource.
      *
      * @throws UnsupportedOperationException
      *             If creation is not allowed/possible
@@ -276,13 +302,17 @@ public class CombinedResourceProvider {
      * @return The new resource
      */
     public Resource create(String path, Map<String, Object> properties) throws PersistenceException {
-        List<StatefulResourceProvider> matching = getMatchingModifiableProviders(path);
-        Resource creationResultResource = head(matching).create(path, properties, tail(matching));
-        if (creationResultResource != null) {
-            return creationResultResource;
+        try {
+            final StatefulResourceProvider provider = getBestMatchingModifiableProvider(path);
+            if ( provider != null ) {
+                final Resource creationResultResource = provider.create(path, properties);
+                if (creationResultResource != null) {
+                    return creationResultResource;
+                }
+            }
+        } catch (LoginException le) {
+            // ignore and throw (see below)
         }
-        // If none of the viable handlers could create the resource or if the
-        // list of handlers was empty, throw an Exception
         throw new UnsupportedOperationException("create '" + getName(path) + "' at " + ResourceUtil.getParent(path));
     }
 
@@ -297,24 +327,18 @@ public class CombinedResourceProvider {
      * @throws PersistenceException
      *             If deletion fails
      */
-    public void delete(Resource resource) throws PersistenceException {
+    public void delete(final Resource resource) throws PersistenceException {
         final String path = resource.getPath();
-        final Map<String, String> parameters = resource.getResourceMetadata().getParameterMap();
-        boolean anyProviderAttempted = false;
-
-        // Give all viable handlers a chance to delete the resource
-        for (StatefulResourceProvider p : getMatchingModifiableProviders(path)) {
-            Resource providerResource = p.getResource(path, null, parameters, false, null);
-            if (providerResource != null) {
-                anyProviderAttempted = true;
-                p.delete(providerResource, null);
+        try {
+            final StatefulResourceProvider provider = getBestMatchingModifiableProvider(path);
+            if ( provider != null ) {
+                provider.delete(resource);
+                return;
             }
+        } catch (LoginException le) {
+            // ignore and throw (see below)
         }
-        // If none of the viable handlers could delete the resource or if the
-        // list of handlers was empty, throw an Exception
-        if (!anyProviderAttempted) {
-            throw new UnsupportedOperationException("delete at '" + path + "'");
-        }
+        throw new UnsupportedOperationException("delete at '" + path + "'");
     }
 
     /**
@@ -348,10 +372,84 @@ public class CombinedResourceProvider {
     }
 
     /**
-     * Queries all resource providers and combines the results.
+     * Queries a resource provider
+     * Right now, a query against only one resource provider is allowed.
      */
-    public QueryResult find(final Query q, final QueryInstructions qi) {
-        return new CombinedQueryResult(q, qi);
+    public Result find(final Query q, final QueryInstructions qi) {
+        final Set<StatefulResourceProvider> providers = new HashSet<StatefulResourceProvider>();
+        collect(providers, q);
+        QueryResult result = null;
+        if ( !providers.isEmpty() ) {
+            // providers contains only a single provider (collect throws an IAE otherwise)
+            final StatefulResourceProvider handler = providers.iterator().next();
+            result = handler.find(q, qi);
+        }
+        if ( result == null ) {
+            return new Result() {
+
+                @Override
+                public Iterator<Resource> iterator() {
+                    final Collection<Resource> col = Collections.emptyList();
+                    return col.iterator();
+                }
+
+                @Override
+                public String getContinuationKey() {
+                    return null;
+                }
+            };
+        }
+        final QueryResult qr = result;
+        return new Result() {
+
+            @Override
+            public Iterator<Resource> iterator() {
+                return qr.getResources().iterator();
+            }
+
+            @Override
+            public String getContinuationKey() {
+                return qr.getContinuationKey();
+            }
+        };
+    }
+
+    private void collect(final Set<StatefulResourceProvider> providers, final Query q) {
+        if ( q.getQueryType() == QueryType.SINGLE ) {
+            if ( q.getPaths().isEmpty() ) {
+                final Node<ResourceProviderHandler> node = storage.getTree().getBestMatchingNode("/");
+                if ( node != null && node.getValue().getResourceProvider().getQueryProvider() != null ) {
+                    try {
+                        final StatefulResourceProvider srp = authenticator.getStateful(node.getValue(), this);
+
+                        if ( providers.add(srp) && providers.size() > 1 ) {
+                            throw new IllegalArgumentException("More than one provider involved in query.");
+                        }
+                    } catch ( final LoginException le ) {
+                        // we can ignore this
+                    }
+                }
+            } else {
+                for(final String p : q.getPaths() ) {
+                    final Node<ResourceProviderHandler> node = storage.getTree().getBestMatchingNode(p);
+                    if ( node != null && node.getValue().getResourceProvider().getQueryProvider() != null ) {
+                        try {
+                            final StatefulResourceProvider srp = authenticator.getStateful(node.getValue(), this);
+
+                            if ( providers.add(srp) && providers.size() > 1 ) {
+                                throw new IllegalArgumentException("More than one provider involved in query.");
+                            }
+                        } catch ( final LoginException le ) {
+                            // we can ignore this
+                        }
+                    }
+                }
+            }
+        } else {
+            for(final Query iq : q.getParts()) {
+                collect(providers, iq);
+            }
+        }
     }
 
     /**
@@ -359,7 +457,7 @@ public class CombinedResourceProvider {
      */
     public String[] getSupportedLanguages() {
         Set<String> supportedLanguages = new LinkedHashSet<String>();
-        for (StatefulResourceProvider p : authenticator.getAll(storage.getJcrQuerableHandlers())) {
+        for (StatefulResourceProvider p : authenticator.getAllBestEffort(storage.getJcrQuerableHandlers(), this)) {
             supportedLanguages.addAll(Arrays.asList(p.getSupportedLanguages()));
         }
         return supportedLanguages.toArray(new String[supportedLanguages.size()]);
@@ -379,7 +477,7 @@ public class CombinedResourceProvider {
 
     private List<StatefulResourceProvider> getQuerableProviders(String language) {
         List<StatefulResourceProvider> querableProviders = new ArrayList<StatefulResourceProvider>();
-        for (StatefulResourceProvider p : authenticator.getAll(storage.getJcrQuerableHandlers())) {
+        for (StatefulResourceProvider p : authenticator.getAllBestEffort(storage.getJcrQuerableHandlers(), this)) {
             if (ArrayUtils.contains(p.getSupportedLanguages(), language)) {
                 querableProviders.add(p);
             }
@@ -405,7 +503,7 @@ public class CombinedResourceProvider {
      */
     @SuppressWarnings("unchecked")
     public <AdapterType> AdapterType adaptTo(Class<AdapterType> type) {
-        for (StatefulResourceProvider p : authenticator.getAll(storage.getAdaptableHandlers())) {
+        for (StatefulResourceProvider p : authenticator.getAllBestEffort(storage.getAdaptableHandlers(), this)) {
             final Object adaptee = p.adaptTo(type);
             if (adaptee != null) {
                 return (AdapterType) adaptee;
@@ -414,17 +512,105 @@ public class CombinedResourceProvider {
         return null;
     }
 
+    private StatefulResourceProvider checkSourceAndDest(final String srcAbsPath, final String destAbsPath) throws PersistenceException {
+        // check source
+        final Node<ResourceProviderHandler> srcNode = storage.getTree().getBestMatchingNode(srcAbsPath);
+        if ( srcNode == null ) {
+            throw new PersistenceException("Source resource does not exist.", null, srcAbsPath, null);
+        }
+        StatefulResourceProvider srcProvider = null;
+        try {
+            srcProvider = authenticator.getStateful(srcNode.getValue(), this);
+        } catch (LoginException e) {
+            // ignore
+        }
+        if ( srcProvider == null ) {
+            throw new PersistenceException("Source resource does not exist.", null, srcAbsPath, null);
+        }
+        final Resource srcResource = srcProvider.getResource(srcAbsPath, null, null, false);
+        if ( srcResource == null ) {
+            throw new PersistenceException("Source resource does not exist.", null, srcAbsPath, null);
+        }
+
+        // check destination
+        final Node<ResourceProviderHandler> destNode = storage.getTree().getBestMatchingNode(destAbsPath);
+        if ( destNode == null ) {
+            throw new PersistenceException("Destination resource does not exist.", null, destAbsPath, null);
+        }
+        StatefulResourceProvider destProvider = null;
+        try {
+            destProvider = authenticator.getStateful(destNode.getValue(), this);
+        } catch (LoginException e) {
+            // ignore
+        }
+        if ( destProvider == null ) {
+            throw new PersistenceException("Destination resource does not exist.", null, destAbsPath, null);
+        }
+        final Resource destResource = destProvider.getResource(destAbsPath, null, null, false);
+        if ( destResource == null ) {
+            throw new PersistenceException("Destination resource does not exist.", null, destAbsPath, null);
+        }
+
+        // check for sub providers of src and dest
+        if ( srcProvider == destProvider && !collectProviders(srcNode) && !collectProviders(destNode) ) {
+            return srcProvider;
+        }
+        return null;
+    }
+
+    private boolean collectProviders(final Node<ResourceProviderHandler> parent) {
+        boolean hasMoreProviders = false;
+        for (final Entry<String, Node<ResourceProviderHandler>> entry : parent.getChildren().entrySet()) {
+            if ( entry.getValue().getValue() != null ) {
+                try {
+                    authenticator.getStateful(entry.getValue().getValue(), this);
+                    hasMoreProviders = true;
+                } catch ( final LoginException ignore) {
+                    // ignore
+                }
+            }
+            if ( collectProviders(entry.getValue())) {
+                hasMoreProviders = true;
+            }
+        }
+
+        return hasMoreProviders;
+    }
+
+    private void copy(final Resource src, final String dstPath, final List<Resource> newNodes) throws PersistenceException {
+        final ValueMap vm = src.getValueMap();
+        final String createPath = dstPath + '/' + src.getName();
+        newNodes.add(this.create(createPath, vm));
+        for(final Resource c : src.getChildren()) {
+            copy(c, createPath, newNodes);
+        }
+    }
+
     /**
      * Tries to find a resource provider accepting both paths and invokes
      * {@link StatefulResourceProvider#copy(String, String)} method on it.
      * Returns false if there's no such provider.
      */
-    public boolean copy(String srcAbsPath, String destAbsPath) throws PersistenceException {
-        List<StatefulResourceProvider> srcProviders = getMatchingProviders(srcAbsPath);
-        List<StatefulResourceProvider> dstProviders = getMatchingModifiableProviders(destAbsPath);
-        @SuppressWarnings("unchecked")
-        List<StatefulResourceProvider> intersection = ListUtils.intersection(srcProviders, dstProviders);
-        return head(intersection).copy(srcAbsPath, destAbsPath, tail(intersection));
+    public Resource copy(final String srcAbsPath, final String destAbsPath) throws PersistenceException {
+        final StatefulResourceProvider optimizedSourceProvider = checkSourceAndDest(srcAbsPath, destAbsPath);
+        if ( optimizedSourceProvider != null && optimizedSourceProvider.copy(srcAbsPath, destAbsPath) ) {
+            return this.getResource(destAbsPath + '/' + ResourceUtil.getName(srcAbsPath), null, null, false);
+        }
+
+        final Resource srcResource = this.getResource(srcAbsPath, null, null, false);
+        final List<Resource> newResources = new ArrayList<Resource>();
+        boolean rollback = true;
+        try {
+            this.copy(srcResource, destAbsPath, newResources);
+            rollback = false;
+            return newResources.get(0);
+        } finally {
+            if ( rollback ) {
+                for(final Resource rsrc : newResources) {
+                    this.delete(rsrc);
+                }
+            }
+        }
     }
 
     /**
@@ -432,81 +618,61 @@ public class CombinedResourceProvider {
      * {@link StatefulResourceProvider#move(String, String)} method on it.
      * Returns false if there's no such provider.
      */
-    public boolean move(String srcAbsPath, String destAbsPath) throws PersistenceException {
-        List<StatefulResourceProvider> srcProviders = getMatchingModifiableProviders(srcAbsPath);
-        List<StatefulResourceProvider> dstProviders = getMatchingModifiableProviders(destAbsPath);
-        @SuppressWarnings("unchecked")
-        List<StatefulResourceProvider> intersection = ListUtils.intersection(srcProviders, dstProviders);
-        return head(intersection).move(srcAbsPath, destAbsPath, tail(intersection));
-    }
-
-    private List<StatefulResourceProvider> getMatchingProviders(String path) {
-        List<ResourceProviderHandler> handlers = storage.getTree().getMatchingNodes(path);
-        StatefulResourceProvider[] matching = new StatefulResourceProvider[handlers.size()];
-        int i = matching.length - 1;
-        for (ResourceProviderHandler h : handlers) {
-            matching[i--] = authenticator.getStateful(h); // reverse order
+    public Resource move(String srcAbsPath, String destAbsPath) throws PersistenceException {
+        final StatefulResourceProvider optimizedSourceProvider = checkSourceAndDest(srcAbsPath, destAbsPath);
+        if ( optimizedSourceProvider != null && optimizedSourceProvider.move(srcAbsPath, destAbsPath) ) {
+            return this.getResource(destAbsPath + '/' + ResourceUtil.getName(srcAbsPath), null, null, false);
         }
-        return Arrays.asList(matching);
-    }
-
-    private List<StatefulResourceProvider> getMatchingModifiableProviders(String path) {
-        List<ResourceProviderHandler> handlers = storage.getTree().getMatchingNodes(path);
-        List<StatefulResourceProvider> matching = new ArrayList<StatefulResourceProvider>(handlers.size());
-        for (ResourceProviderHandler h : handlers) {
-            if (h.getInfo().getModifiable()) {
-                matching.add(authenticator.getStateful(h));
+        final Resource srcResource = this.getResource(srcAbsPath, null, null, false);
+        final List<Resource> newResources = new ArrayList<Resource>();
+        boolean rollback = true;
+        try {
+            this.copy(srcResource, destAbsPath, newResources);
+            this.delete(srcResource);
+            rollback = false;
+            return newResources.get(0);
+        } finally {
+            if ( rollback ) {
+                for(final Resource rsrc : newResources) {
+                    this.delete(rsrc);
+                }
             }
         }
-        Collections.reverse(matching);
-        return matching;
     }
 
-    private static StatefulResourceProvider head(List<StatefulResourceProvider> list) {
-        if (list.isEmpty()) {
-            return EMPTY_PROVIDER;
-        } else {
-            return list.get(0);
-        }
+    public ResourceProviderStorage getResourceProviderStorage() {
+        return this.storage;
     }
 
-    private static <T> List<T> tail(List<T> list) {
-        if (list.isEmpty()) {
-            return Collections.emptyList();
-        } else {
-            return list.subList(1, list.size());
+    public @CheckForNull StatefulResourceProvider getStatefulResourceProvider(@Nonnull final ResourceProviderHandler handler)
+    throws LoginException {
+        if ( handler != null ) {
+            return authenticator.getStateful(handler, this);
         }
+        return null;
     }
 
-    private class CombinedQueryResult extends QueryResult implements Iterable<Resource> {
+    /**
+     * @param path
+     * @return
+     * @throws LoginException
+     */
+    private @Nonnull StatefulResourceProvider getBestMatchingProvider(final String path) throws LoginException {
+        final Node<ResourceProviderHandler> node = storage.getTree().getBestMatchingNode(path);
+        return node == null ? EmptyResourceProvider.SINGLETON : authenticator.getStateful(node.getValue(), this);
+    }
 
-        private final Query q;
-
-        private final QueryInstructions qi;
-
-        public CombinedQueryResult(Query q, QueryInstructions qi) {
-            this.q = q;
-            this.qi = qi;
+    /**
+     * @param path
+     * @return The modifiable provider or {@code null}
+     * @throws LoginException
+     */
+    private @CheckForNull StatefulResourceProvider getBestMatchingModifiableProvider(final String path) throws LoginException {
+        final Node<ResourceProviderHandler> node = storage.getTree().getBestMatchingNode(path);
+        if ( node != null && node.getValue().getInfo().isModifiable() ) {
+            return authenticator.getStateful(node.getValue(), this);
         }
-
-        @Override
-        public Iterable<Resource> getResources() {
-            return this;
-        }
-
-        @Override
-        public Iterator<Resource> iterator() {
-            @SuppressWarnings("unchecked")
-            Iterator<Iterator<Resource>> iterators = IteratorUtils.transformedIterator(authenticator.getAll(storage.getNativeQuerableHandlers()).iterator(),
-                    new Transformer() {
-                        @Override
-                        public Object transform(Object input) {
-                            StatefulResourceProvider rp = (StatefulResourceProvider) input;
-                            return rp.find(q, qi).getResources().iterator();
-                        }
-                    });
-            return new ChainedIterator<Resource>(iterators);
-        }
+        return null;
     }
 
     private static class ChainedIterator<T> extends AbstractIterator<T> {
@@ -537,7 +703,7 @@ public class CombinedResourceProvider {
             }
         }
     }
-    
+
     /**
      * This iterator removes duplicated Resource entries. Regular resources
      * overrides the synthetic ones.
@@ -546,41 +712,28 @@ public class CombinedResourceProvider {
 
         private final Iterator<Resource> input;
 
-        private final List<String> visited;
+        private final Set<String> visited;
 
-        private final Map<String, Resource> delayed;
-
-        private Iterator<Resource> delayedIterator;
-
-        public UniqueIterator(Iterator<Resource> input) {
+        public UniqueIterator(final Set<String> visited, final Iterator<Resource> input) {
             this.input = input;
-            this.visited = new ArrayList<String>();
-            this.delayed = new LinkedHashMap<String, Resource>();
+            this.visited = visited;
         }
 
         @Override
         protected Resource seek() {
             while (input.hasNext()) {
-                Resource next = input.next();
-                String path = next.getPath();
+                final Resource next = input.next();
+                final String name = next.getName();
 
-                if (visited.contains(path)) {
+                if (visited.contains(name)) {
                     continue;
-                } else if (next instanceof SyntheticResource) {
-                    delayed.put(path, next);
                 } else {
-                    visited.add(path);
-                    delayed.remove(path);
+                    visited.add(name);
+                    next.getResourceMetadata().setResolutionPath(next.getPath());
                     return next;
                 }
             }
 
-            if (delayedIterator == null) {
-                delayedIterator = delayed.values().iterator();
-            }
-            if (delayedIterator.hasNext()) {
-                return delayedIterator.next();
-            }
             return null;
         }
     }

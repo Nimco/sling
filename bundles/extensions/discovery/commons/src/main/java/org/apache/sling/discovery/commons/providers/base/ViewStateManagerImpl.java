@@ -36,7 +36,7 @@ import org.apache.sling.discovery.TopologyEventListener;
 import org.apache.sling.discovery.commons.providers.BaseTopologyView;
 import org.apache.sling.discovery.commons.providers.EventHelper;
 import org.apache.sling.discovery.commons.providers.ViewStateManager;
-import org.apache.sling.discovery.commons.providers.spi.ConsistencyService;
+import org.apache.sling.discovery.commons.providers.spi.ClusterSyncService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,7 +47,7 @@ import org.slf4j.LoggerFactory;
  * <p>
  * Note re synchronization: this class rquires a lock object to be passed
  * in the constructor - this will be applied to all public methods
- * appropriately. Additionally, the ConsistencyService callback will
+ * appropriately. Additionally, the ClusterSyncService callback will
  * also be locked using the provided lock object.
  */
 public class ViewStateManagerImpl implements ViewStateManager {
@@ -107,12 +107,12 @@ public class ViewStateManagerImpl implements ViewStateManager {
     protected final Lock lock;
 
     /**
-     * An optional ConsistencyService can be provided in the constructor which, when set, will
+     * An optional ClusterSyncService can be provided in the constructor which, when set, will
      * be invoked upon a new view becoming available (in handleNewView) and the actual
-     * TOPOLOGY_CHANGED event will only be sent once the ConsistencyService.sync method
+     * TOPOLOGY_CHANGED event will only be sent once the ClusterSyncService.sync method
      * does the according callback (which can be synchronous or asynchronous again).
      */
-    private final ConsistencyService consistencyService;
+    private final ClusterSyncService consistencyService;
     
     /** 
      * A modification counter that increments on each of the following methods:
@@ -123,7 +123,7 @@ public class ViewStateManagerImpl implements ViewStateManager {
      *  <li>handleNewView()</li>
      * </ul>
      * with the intent that - when a consistencyService is set - the callback from the
-     * ConsistencyService can check if any of the above methods was invoked - and if so,
+     * ClusterSyncService can check if any of the above methods was invoked - and if so,
      * it does not send the TOPOLOGY_CHANGED event due to those new facts that happened
      * while it was synching with the repository.
      */
@@ -139,13 +139,13 @@ public class ViewStateManagerImpl implements ViewStateManager {
 
     /**
      * Creates a new ViewStateManager which synchronizes each method with the given
-     * lock and which optionally uses the given ConsistencyService to sync the repository
+     * lock and which optionally uses the given ClusterSyncService to sync the repository
      * upon handling a new view where an instances leaves the local cluster.
      * @param lock the lock to be used - must not be null
-     * @param consistencyService optional (ie can be null) - the ConsistencyService to 
+     * @param consistencyService optional (ie can be null) - the ClusterSyncService to 
      * sync the repository upon handling a new view where an instances leaves the local cluster.
      */
-    ViewStateManagerImpl(Lock lock, ConsistencyService consistencyService) {
+    ViewStateManagerImpl(Lock lock, ClusterSyncService consistencyService) {
         if (lock==null) {
             throw new IllegalArgumentException("lock must not be null");
         }
@@ -486,10 +486,10 @@ public class ViewStateManagerImpl implements ViewStateManager {
                 return true;
             }
             
-            final boolean invokeConsistencyService;
+            final boolean invokeClusterSyncService;
             if (consistencyService==null) {
-                logger.info("handleNewViewNonDelayed: no consistencyService set - continuing directly.");
-                invokeConsistencyService = false;
+                logger.info("handleNewViewNonDelayed: no ClusterSyncService set - continuing directly.");
+                invokeClusterSyncService = false;
             } else {
                 // there used to be a distinction between:
                 // * if no previousView is set, then we should invoke the consistencyService
@@ -503,41 +503,71 @@ public class ViewStateManagerImpl implements ViewStateManager {
                 //
                 // which is a long way of saying: if the consistencyService is configured,
                 // then we always use it, hence:
-                logger.info("handleNewViewNonDelayed: consistencyService set - invoking consistencyService");
-                invokeConsistencyService = true;
+                logger.info("handleNewViewNonDelayed: ClusterSyncService set - invoking...");
+                invokeClusterSyncService = true;
             }
                         
-            if (invokeConsistencyService) {
+            if (invokeClusterSyncService) {
                 // if "instances from the local cluster have been removed"
                 // then:
                 // run the set consistencyService
                 final int lastModCnt = modCnt;
-                logger.info("handleNewViewNonDelayed: invoking consistencyService (modCnt={})", modCnt);
-                consistencyService.sync(newView,
-                        new Runnable() {
+                logger.info("handleNewViewNonDelayed: invoking waitForAsyncEvents, then clusterSyncService (modCnt={})", modCnt);
+                asyncEventSender.enqueue(new AsyncEvent() {
                     
-                    public void run() {
-                        logger.trace("consistencyService.callback.run: start. acquiring lock...");
+                    @Override
+                    public String toString() {
+                        return "the waitForAsyncEvents-flush-token-"+hashCode();
+                    }
+                    
+                    @Override
+                    public void trigger() {
+                        // when this event is triggered we're guaranteed to have 
+                        // no more async events - cos the async events are handled
+                        // in a queue and this AsyncEvent was put at the end of the
+                        // queue at enqueue time. So now e can go ahead.
+                        // the plus using such a token event is that others when
+                        // calling waitForAsyncEvent() will get blocked while this
+                        // 'token async event' is handled. Which is what we explicitly want.
                         lock.lock();
                         try{
-                            logger.debug("consistencyService.callback.run: lock aquired. (modCnt should be {}, is {})", lastModCnt, modCnt);
                             if (modCnt!=lastModCnt) {
-                                logger.info("consistencyService.callback.run: modCnt changed (from {} to {}) - ignoring",
+                                logger.info("handleNewViewNonDelayed/waitForAsyncEvents.run: modCnt changed (from {} to {}) - ignoring",
                                         lastModCnt, modCnt);
                                 return;
                             }
-                            logger.info("consistencyService.callback.run: invoking doHandleConsistent.");
-                            // else:
-                            doHandleConsistent(newView);
+                            logger.info("handleNewViewNonDelayed/waitForAsyncEvents.run: done, now invoking consistencyService (modCnt={})", modCnt);
+                            consistencyService.sync(newView,
+                                    new Runnable() {
+                                
+                                public void run() {
+                                    logger.trace("consistencyService.callback.run: start. acquiring lock...");
+                                    lock.lock();
+                                    try{
+                                        logger.debug("consistencyService.callback.run: lock aquired. (modCnt should be {}, is {})", lastModCnt, modCnt);
+                                        if (modCnt!=lastModCnt) {
+                                            logger.info("consistencyService.callback.run: modCnt changed (from {} to {}) - ignoring",
+                                                    lastModCnt, modCnt);
+                                            return;
+                                        }
+                                        logger.info("consistencyService.callback.run: invoking doHandleConsistent.");
+                                        // else:
+                                        doHandleConsistent(newView);
+                                    } finally {
+                                        lock.unlock();
+                                        logger.trace("consistencyService.callback.run: end.");
+                                    }
+                                }
+                                
+                            });
                         } finally {
                             lock.unlock();
-                            logger.trace("consistencyService.callback.run: end.");
                         }
                     }
                     
                 });
             } else {
-                // otherwise we're either told not to use any ConsistencyService
+                // otherwise we're either told not to use any ClusterSyncService
                 // or using it is not applicable at this stage - so continue
                 // with sending the TOPOLOGY_CHANGED (or TOPOLOGY_INIT if there
                 // are any newly bound topology listeners) directly
@@ -628,22 +658,38 @@ public class ViewStateManagerImpl implements ViewStateManager {
     }
 
     @Override
-    public boolean waitForAsyncEvents(long timeout) {
+    public int waitForAsyncEvents(long timeout) {
         long end = System.currentTimeMillis() + timeout;
-        while(asyncEventSender.hasInFlightEvent() || 
-                (minEventDelayHandler!=null && minEventDelayHandler.isDelaying())) {
-            if (timeout==0) {
-                return false;
+        while(true) {
+            int inFlightEventCnt = getInFlightAsyncEventCnt();
+            if (inFlightEventCnt==0) {
+                // no in-flight events - return 0
+                return 0;
             }
-            if (timeout<0 || System.currentTimeMillis()<end) {
+            if (timeout==0) {
+                // timeout is set to 'no-wait', but we have in-flight events,
+                // return the actual cnt
+                return inFlightEventCnt;
+            }
+            if (timeout<0 /*infinite waiting*/ || System.currentTimeMillis()<end) {
                 try {
                     Thread.sleep(50);
                 } catch (InterruptedException e) {
                     // ignore
                 }
+            } else {
+                // timeout hit
+                return inFlightEventCnt;
             }
         }
-        return true;
+    }
+    
+    private int getInFlightAsyncEventCnt() {
+        int cnt = asyncEventSender.getInFlightEventCnt();
+        if (minEventDelayHandler!=null && minEventDelayHandler.isDelaying()) {
+            cnt++;
+        }
+        return cnt;
     }
     
 }

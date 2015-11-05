@@ -20,7 +20,6 @@ package org.apache.sling.resourceresolver.impl.providers.stateful;
 
 import java.util.Collection;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 
 import org.apache.sling.api.resource.LoginException;
@@ -30,7 +29,7 @@ import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.api.resource.query.Query;
 import org.apache.sling.api.resource.query.QueryInstructions;
 import org.apache.sling.spi.resource.provider.QueryResult;
-import org.apache.sling.spi.resource.provider.ResolveContext;
+import org.apache.sling.spi.resource.provider.ResolverContext;
 import org.apache.sling.spi.resource.provider.ResourceProvider;
 
 public class StatefulResourceProviderWrapper implements StatefulResourceProvider {
@@ -57,18 +56,18 @@ public class StatefulResourceProviderWrapper implements StatefulResourceProvider
     }
 
     @Override
-    public Resource getParent(Resource child, List<StatefulResourceProvider> parentProviders) {
-        return rp.getParent(child, parentProviders);
+    public Resource getParent(Resource child) {
+        return rp.getParent(child);
     }
 
     @Override
-    public Resource getResource(String path, Resource parent, Map<String, String> parameters, boolean isResolve,  List<StatefulResourceProvider> parentProviders) {
-        return rp.getResource(path, parent, parameters, isResolve, parentProviders);
+    public Resource getResource(String path, Resource parent, Map<String, String> parameters, boolean isResolve) {
+        return rp.getResource(path, parent, parameters, isResolve);
     }
 
     @Override
-    public Iterator<Resource> listChildren(Resource parent, List<StatefulResourceProvider> parentProviders) {
-        return rp.listChildren(parent, parentProviders);
+    public Iterator<Resource> listChildren(Resource parent) {
+        return rp.listChildren(parent);
     }
 
     @Override
@@ -82,13 +81,13 @@ public class StatefulResourceProviderWrapper implements StatefulResourceProvider
     }
 
     @Override
-    public Resource create(String path, Map<String, Object> properties, List<StatefulResourceProvider> parentProviders) throws PersistenceException {
-        return rp.create(path, properties, parentProviders);
+    public Resource create(String path, Map<String, Object> properties) throws PersistenceException {
+        return rp.create(path, properties);
     }
 
     @Override
-    public void delete(Resource resource, List<StatefulResourceProvider> parentProviders) throws PersistenceException {
-        rp.delete(resource, parentProviders);
+    public void delete(Resource resource) throws PersistenceException {
+        rp.delete(resource);
     }
 
     @Override
@@ -132,13 +131,13 @@ public class StatefulResourceProviderWrapper implements StatefulResourceProvider
     }
 
     @Override
-    public boolean copy(String srcAbsPath, String destAbsPath, List<StatefulResourceProvider> parentProviders) throws PersistenceException {
-        return rp.copy(srcAbsPath, destAbsPath, parentProviders);
+    public boolean copy(String srcAbsPath, String destAbsPath) throws PersistenceException {
+        return rp.copy(srcAbsPath, destAbsPath);
     }
 
     @Override
-    public boolean move(String srcAbsPath, String destAbsPath, List<StatefulResourceProvider> parentProviders) throws PersistenceException {
-        return rp.move(srcAbsPath, destAbsPath, parentProviders);
+    public boolean move(String srcAbsPath, String destAbsPath) throws PersistenceException {
+        return rp.move(srcAbsPath, destAbsPath);
     }
 
     @Override
@@ -152,7 +151,7 @@ public class StatefulResourceProviderWrapper implements StatefulResourceProvider
     }
 
     @Override
-    public ResolveContext<Object> getContext(Map<String, String> parameters) throws LoginException {
-        return rp.getContext(parameters);
+    public ResolverContext<Object> getContext() throws LoginException {
+        return rp.getContext();
     }
 }

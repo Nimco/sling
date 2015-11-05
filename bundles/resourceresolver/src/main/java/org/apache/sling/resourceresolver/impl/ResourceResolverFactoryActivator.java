@@ -37,15 +37,17 @@ import org.apache.felix.scr.annotations.Reference;
 import org.apache.felix.scr.annotations.ReferenceCardinality;
 import org.apache.felix.scr.annotations.ReferencePolicy;
 import org.apache.felix.scr.annotations.References;
-import org.apache.felix.scr.annotations.Service;
-import org.apache.sling.api.SlingConstants;
 import org.apache.sling.api.resource.ResourceDecorator;
 import org.apache.sling.api.resource.ResourceResolverFactory;
+import org.apache.sling.api.resource.runtime.RuntimeService;
 import org.apache.sling.commons.osgi.PropertiesUtil;
 import org.apache.sling.resourceresolver.impl.helper.ResourceDecoratorTracker;
 import org.apache.sling.resourceresolver.impl.mapping.MapEntries;
 import org.apache.sling.resourceresolver.impl.mapping.Mapping;
+import org.apache.sling.resourceresolver.impl.observation.ResourceChangeListenerWhiteboard;
 import org.apache.sling.resourceresolver.impl.providers.ResourceProviderTracker;
+import org.apache.sling.resourceresolver.impl.providers.ResourceProviderTracker.ChangeListener;
+import org.apache.sling.resourceresolver.impl.providers.RuntimeServiceImpl;
 import org.apache.sling.serviceusermapping.ServiceUserMapper;
 import org.osgi.framework.Bundle;
 import org.osgi.framework.BundleContext;
@@ -53,10 +55,7 @@ import org.osgi.framework.Constants;
 import org.osgi.framework.ServiceFactory;
 import org.osgi.framework.ServiceRegistration;
 import org.osgi.service.component.ComponentContext;
-import org.osgi.service.event.Event;
 import org.osgi.service.event.EventAdmin;
-import org.osgi.service.event.EventConstants;
-import org.osgi.service.event.EventHandler;
 
 /**
  * The <code>ResourceResolverFactoryActivator/code> keeps track of required services for the
@@ -71,22 +70,22 @@ import org.osgi.service.event.EventHandler;
      label = "Apache Sling Resource Resolver Factory",
      description = "Configures the Resource Resolver for request URL and resource path rewriting.",
      specVersion = "1.1",
-     metatype = true,
-     immediate = true)
+     metatype = true)
 @Properties({
     @Property(name = Constants.SERVICE_DESCRIPTION, value = "Apache Sling Resource Resolver Factory"),
-    @Property(name = Constants.SERVICE_VENDOR, value = "The Apache Software Foundation"),
-    @Property(name = EventConstants.EVENT_TOPIC, value = SlingConstants.TOPIC_RESOURCE_PROVIDER_ADDED, propertyPrivate = true)
+    @Property(name = Constants.SERVICE_VENDOR, value = "The Apache Software Foundation")
 })
 @References({
     @Reference(name = "ResourceDecorator", referenceInterface = ResourceDecorator.class, cardinality = ReferenceCardinality.OPTIONAL_MULTIPLE, policy = ReferencePolicy.DYNAMIC)
 })
-@Service(EventHandler.class)
-public class ResourceResolverFactoryActivator implements Runnable, EventHandler {
+public class ResourceResolverFactoryActivator implements Runnable {
 
     private static final class FactoryRegistration {
         /** Registration .*/
         public volatile ServiceRegistration factoryRegistration;
+
+        /** Runtime registration. */
+        public volatile ServiceRegistration runtimeRegistration;
 
         public volatile CommonResourceResolverFactoryImpl commonFactory;
     }
@@ -196,7 +195,7 @@ public class ResourceResolverFactoryActivator implements Runnable, EventHandler 
               description = "The maximum number of cached vanity path entries. " +
                             "Default is -1 (no limit)")
     private static final String PROP_MAX_CACHED_VANITY_PATHS = "resource.resolver.vanitypath.maxEntries";
-    
+
     private static final boolean DEFAULT_MAX_CACHED_VANITY_PATHS_STARTUP = true;
     @Property(boolValue = DEFAULT_MAX_CACHED_VANITY_PATHS_STARTUP,
               label = "Limit the maximum number of cached vanity path entries only at startup",
@@ -288,8 +287,9 @@ public class ResourceResolverFactoryActivator implements Runnable, EventHandler 
     @Reference
     ResourceAccessSecurityTracker resourceAccessSecurityTracker;
 
-    @Reference
-    ResourceProviderTracker resourceProviderTracker;
+    volatile ResourceProviderTracker resourceProviderTracker;
+
+    volatile ResourceChangeListenerWhiteboard changeListenerWhiteboard;
 
     /** ComponentContext */
     private volatile ComponentContext componentContext;
@@ -304,7 +304,7 @@ public class ResourceResolverFactoryActivator implements Runnable, EventHandler 
 
     /** max number of cache vanity path entries */
     private long maxCachedVanityPathEntries = DEFAULT_MAX_CACHED_VANITY_PATHS;
-    
+
     /** limit max number of cache vanity path entries only at startup*/
     private boolean maxCachedVanityPathEntriesStartup = DEFAULT_MAX_CACHED_VANITY_PATHS_STARTUP;
 
@@ -411,7 +411,7 @@ public class ResourceResolverFactoryActivator implements Runnable, EventHandler 
     public long getMaxCachedVanityPathEntries() {
         return this.maxCachedVanityPathEntries;
     }
-    
+
     public boolean isMaxCachedVanityPathEntriesStartup() {
         return this.maxCachedVanityPathEntriesStartup;
     }
@@ -477,6 +477,24 @@ public class ResourceResolverFactoryActivator implements Runnable, EventHandler 
         }
         if (searchPath == null) {
             searchPath = new String[] { "/" };
+        }
+        // for testing: if we run unit test, both trackers are set from the outside
+        if ( this.resourceProviderTracker == null ) {
+            this.resourceProviderTracker = new ResourceProviderTracker();
+            this.changeListenerWhiteboard = new ResourceChangeListenerWhiteboard();
+            this.changeListenerWhiteboard.activate(this.componentContext.getBundleContext(),
+                this.resourceProviderTracker, searchPath);
+            this.resourceProviderTracker.activate(this.componentContext.getBundleContext(),
+                    this.eventAdmin,
+                    new ChangeListener() {
+
+                        @Override
+                        public void providerChanged(final String pid) {
+                            if (ArrayUtils.contains(requiredResourceProviders, pid)) {
+                                checkFactoryPreconditions();
+                            }
+                        }
+                    });
         }
 
         // namespace mangling
@@ -552,6 +570,8 @@ public class ResourceResolverFactoryActivator implements Runnable, EventHandler 
      */
     @Deactivate
     protected void deactivate() {
+        this.changeListenerWhiteboard.deactivate();
+        this.resourceProviderTracker.deactivate();
         this.componentContext = null;
         this.preconds.deactivate();
         this.resourceDecoratorTracker.close();
@@ -584,8 +604,11 @@ public class ResourceResolverFactoryActivator implements Runnable, EventHandler 
             if ( local.factoryRegistration != null ) {
                 local.factoryRegistration.unregister();
             }
+            if ( local.runtimeRegistration != null ) {
+                local.runtimeRegistration.unregister();
+            }
             if ( local.commonFactory != null ) {
-                local.commonFactory.deactivate();;
+                local.commonFactory.deactivate();
             }
         }
     }
@@ -607,6 +630,7 @@ public class ResourceResolverFactoryActivator implements Runnable, EventHandler 
             local.factoryRegistration = localContext.getBundleContext().registerService(
                 ResourceResolverFactory.class.getName(), new ServiceFactory() {
 
+                    @Override
                     public Object getService(final Bundle bundle, final ServiceRegistration registration) {
                         final ResourceResolverFactoryImpl r = new ResourceResolverFactoryImpl(
                                 local.commonFactory, bundle,
@@ -614,13 +638,21 @@ public class ResourceResolverFactoryActivator implements Runnable, EventHandler 
                         return r;
                     }
 
+                    @Override
                     public void ungetService(final Bundle bundle, final ServiceRegistration registration, final Object service) {
                         // nothing to do
                     }
                 }, serviceProps);
 
+            local.runtimeRegistration = localContext.getBundleContext().registerService(RuntimeService.class.getName(),
+                    this.getRuntimeService(), null);
+
             this.factoryRegistration = local;
         }
+    }
+
+    public RuntimeService getRuntimeService() {
+        return new RuntimeServiceImpl(this.resourceProviderTracker);
     }
 
     /**
@@ -652,6 +684,7 @@ public class ResourceResolverFactoryActivator implements Runnable, EventHandler 
         this.resourceDecoratorTracker.unbindResourceDecorator(decorator, props);
     }
 
+    @Override
     public void run() {
         boolean isRunning = true;
         while ( isRunning ) {
@@ -705,12 +738,5 @@ public class ResourceResolverFactoryActivator implements Runnable, EventHandler 
 
     public ResourceProviderTracker getResourceProviderTracker() {
         return resourceProviderTracker;
-    }
-
-    @Override
-    public void handleEvent(Event event) {
-        if (ArrayUtils.contains(requiredResourceProviders, event.getProperty(Constants.SERVICE_PID))) {
-            this.checkFactoryPreconditions();
-        }
     }
 }
