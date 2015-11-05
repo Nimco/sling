@@ -557,9 +557,6 @@ public class HeartbeatHandler extends BaseViewChecker {
             }
         }
 
-        final View establishedView = ViewHelper.getEstablishedView(resourceResolver, config);
-        lastEstablishedViewId = establishedView == null ? null : establishedView.getResource().getName();
-
         final VotingView winningVoting = VotingHelper.getWinningVoting(
                 resourceResolver, config);
         int numOpenNonWinningVotes = VotingHelper.listOpenNonWinningVotings(
@@ -586,6 +583,8 @@ public class HeartbeatHandler extends BaseViewChecker {
         final Set<String> liveInstances = ViewHelper.determineLiveInstances(
                 clusterNodesRes, config);
 
+        final View establishedView = ViewHelper.getEstablishedView(resourceResolver, config);
+        lastEstablishedViewId = establishedView == null ? null : establishedView.getResource().getName();
         boolean establishedViewMatches;
         if (lastEstablishedViewId != null && failedEstablishedViewId != null
                 && lastEstablishedViewId.equals(failedEstablishedViewId)) {

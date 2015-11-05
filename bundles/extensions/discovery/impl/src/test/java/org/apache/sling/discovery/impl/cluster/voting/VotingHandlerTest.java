@@ -283,28 +283,68 @@ public class VotingHandlerTest {
         assertEquals(0, result.size());
     }
     
-    private void asyncVote(final String debugInfo, final VotingHandler votingHandler, final List<VotingDetail> votingDetails, final Semaphore ready, final Semaphore go, final Semaphore done, final Set<Exception> exceptions) throws Exception {
+    private void asyncVote(final String debugInfo, final VotingHandler votingHandler, final List<VotingDetail> votingDetails, final Semaphore ready, final Semaphore go, final Semaphore done, final Set<Throwable> exceptions) throws Exception {
         Runnable r = new Runnable() {
 
             @Override
             public void run() {
+                boolean released = false;
                 try{
                     logger.info("asyncVote["+debugInfo+"] logging in...");
-                    ResourceResolver rr = factory.getAdministrativeResourceResolver(null);
-                    logger.info("asyncVote["+debugInfo+"] marking ready...");
-                    ready.release();
-                    logger.info("asyncVote["+debugInfo+"] waiting for go...");
-                    go.acquire();
-                    logger.info("asyncVote["+debugInfo+"] analyzeVotings...");
-                    Map<VotingView, VotingDetail> result = votingHandler.analyzeVotings(rr);
+                    Map<VotingView, VotingDetail> result = null;
+                    ResourceResolver rr = null;
+                    int retries = 0;
+                    while(true) {
+                        try{
+                            rr = factory.getAdministrativeResourceResolver(null);
+                            if (retries == 0) {
+                                logger.info("asyncVote["+debugInfo+"] marking ready...");
+                                ready.release();
+                                logger.info("asyncVote["+debugInfo+"] waiting for go...");
+                                go.acquire();
+                            } else {
+                                logger.info("asyncVote["+debugInfo+"] not doing ready/go on retry.");
+                            }
+                            logger.info("asyncVote["+debugInfo+"] analyzeVotings...");
+                            result = votingHandler.analyzeVotings(rr);
+                            break;
+                        } catch(Exception e) {
+                            logger.warn("asyncVote["+debugInfo+"] Exception: "+e, e);
+                            if (retries++<5) {
+                                Thread.sleep(500);
+                                logger.info("asyncVote["+debugInfo+"] retrying after Exception...");
+                                continue;
+                            }
+                            throw e;
+                        } finally {
+                            if (rr != null) {
+                                rr.close();
+                            }
+                        }
+                    }
                     logger.info("asyncVote["+debugInfo+"] done, asserting results...");
                     assertNotNull(result);
                     votingDetails.addAll(result.values());
-                    rr.close();
                     logger.info("asyncVote["+debugInfo+"] marking done.");
                     done.release();
+                    released = true;
+                } catch(RuntimeException re) {
+                    // SLING-5244: make sure we're not silently running into an unchecked exception
+                    logger.info("asyncVote["+debugInfo+"] RuntimeException: "+re, re);
+                    exceptions.add(re);
+                    throw re;
+                } catch(Error er) {
+                    // SLING-5244: make sure we're not silently running into an unchecked exception
+                    logger.info("asyncVote["+debugInfo+"] Error: "+er, er);
+                    exceptions.add(er);
+                    throw er;
                 } catch(Exception e) {
+                    // SLING-5244: make sure we're not silently running into an unchecked exception
+                    logger.info("asyncVote["+debugInfo+"] Exception: "+e, e);
                     exceptions.add(e);
+                } finally {
+                    // SLING-5244: make sure we're getting informed when this thread is done - be it normal or not
+                    logger.info("asyncVote["+debugInfo+"] finally [released="+released+"]");
                 }
             }
             
@@ -393,7 +433,7 @@ public class VotingHandlerTest {
             Semaphore ready = new Semaphore(0);
             Semaphore go = new Semaphore(0);
             Semaphore done = new Semaphore(0);
-            Set<Exception> e = new ConcurrentHashSet<Exception>();
+            Set<Throwable> e = new ConcurrentHashSet<Throwable>();
             boolean success = false;
             
             List<List<VotingDetail>> detailList = new LinkedList<List<VotingDetail>>();
