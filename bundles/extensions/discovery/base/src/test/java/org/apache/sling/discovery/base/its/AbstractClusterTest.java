@@ -438,6 +438,8 @@ public abstract class AbstractClusterTest {
                 .setMinEventDelay(1)
                 .setSlingId(instance1.getSlingId()).build();
         runHeartbeatOnceWith(instance1Restarted, instance2, instance3, instance5);
+        // give these heartbeats/votes some time .. so sleep 2sec (timeout is 10sec, so should be safe)
+        Thread.sleep(2000);
         assertTrue(pingConnector(instance3, instance2));
         assertTrue(pingConnector(instance5, instance2));
         success = false;
@@ -476,7 +478,7 @@ public abstract class AbstractClusterTest {
             if (i3ClusterSize==1) {
                 if (i<30) {
                     logger.info("testConnectorSwitching4139: [2] min loop cnt not yet reached: i="+i);
-                    Thread.sleep(500); // 30x500ms = 15sec max - (vs 10sec timeout) - should be enough for timing out
+                    Thread.sleep(500); // 30x500ms = 15sec max - (vs 10sec-2sec[sleep] timeout) - should be enough for timing out
                     continue;
                 }
                 success = true;
@@ -1312,7 +1314,7 @@ public abstract class AbstractClusterTest {
         instance2.heartbeatsAndCheckView();
         instance3.heartbeatsAndCheckView();
         logger.info("testAdditionalInstance: 4th 2s sleep");
-        Thread.sleep(2000);
+        Thread.sleep(3000);
         assertEquals(1, acceptsMultiple.getEventCnt(Type.TOPOLOGY_CHANGING));
         assertEquals(1, acceptsMultiple.getEventCnt(Type.TOPOLOGY_CHANGED));
         logger.info("testAdditionalInstance: end");

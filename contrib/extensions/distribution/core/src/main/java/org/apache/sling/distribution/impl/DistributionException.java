@@ -16,17 +16,22 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.sling.discovery.impl.cluster;
 
-import org.apache.sling.discovery.base.its.AbstractDiscoveryServiceTest;
-import org.apache.sling.discovery.base.its.setup.VirtualInstanceBuilder;
-import org.apache.sling.discovery.impl.setup.FullJR2VirtualInstanceBuilder;
+package org.apache.sling.distribution.impl;
 
-public class DiscoveryServiceImplTest extends AbstractDiscoveryServiceTest {
-
-    @Override
-    public VirtualInstanceBuilder newBuilder() {
-        return new FullJR2VirtualInstanceBuilder();
+/**
+ * Generic checked exception for distribution
+ */
+public class DistributionException extends Exception {
+    public DistributionException(Throwable e) {
+        super(e);
     }
 
+    public DistributionException(String string) {
+        super(string);
+    }
+
+    public DistributionException(String string, Throwable cause) {
+        super(string, cause);
+    }
 }

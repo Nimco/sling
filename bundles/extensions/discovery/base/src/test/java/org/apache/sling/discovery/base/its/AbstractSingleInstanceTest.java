@@ -97,8 +97,8 @@ public abstract class AbstractSingleInstanceTest {
         }
 
         instance.heartbeatsAndCheckView();
-        // wait 100ms for the vote to happen
-        Thread.sleep(100);
+        // wait 4000ms for the vote to happen
+        Thread.sleep(4000);
         
         assertNotNull(instance.getClusterViewService().getLocalClusterView());
         ClusterView cv = instance.getClusterViewService().getLocalClusterView();
@@ -137,8 +137,8 @@ public abstract class AbstractSingleInstanceTest {
         instance.bindPropertyProvider(pp, propertyName);
 
         instance.heartbeatsAndCheckView();
-        // wait 1000ms for the vote to happen
-        Thread.sleep(1000);
+        // wait 4000ms for the vote to happen
+        Thread.sleep(4000);
         assertEquals(propertyValue,
                 instance.getClusterViewService().getLocalClusterView()
                         .getInstances().get(0).getProperty(propertyName));
@@ -235,14 +235,14 @@ public abstract class AbstractSingleInstanceTest {
         logger.info("testTopologyEventListeners: 4th sleep 2s");
         Thread.sleep(2000);
         assertEquals(0, assertingTopologyEventListener.getRemainingExpectedCount());
-        assertEquals(1, pp.getGetCnt());
+        assertEquals(2, pp.getGetCnt());
 
         // a heartbeat repeat should not result in another call though
         instance.heartbeatsAndCheckView();
         logger.info("testTopologyEventListeners: 5th sleep 2s");
         Thread.sleep(2000);
         assertEquals(0, assertingTopologyEventListener.getRemainingExpectedCount());
-        assertEquals(2, pp.getGetCnt());
+        assertEquals(3, pp.getGetCnt());
         logger.info("testTopologyEventListeners: done");
     }
 
