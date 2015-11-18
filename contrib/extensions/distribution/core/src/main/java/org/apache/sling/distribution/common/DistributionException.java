@@ -17,8 +17,21 @@
  * under the License.
  */
 
-@Version("2.2.0")
-package org.apache.sling.api.scripting;
+package org.apache.sling.distribution.common;
 
-import aQute.bnd.annotation.Version;
+/**
+ * Generic checked exception for distribution
+ */
+public class DistributionException extends Exception {
+    public DistributionException(Throwable e) {
+        super(e);
+    }
 
+    public DistributionException(String string) {
+        super(string);
+    }
+
+    public DistributionException(String string, Throwable cause) {
+        super(string, cause);
+    }
+}

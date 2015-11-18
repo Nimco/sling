@@ -39,7 +39,7 @@ import org.apache.sling.commons.scheduler.Scheduler;
 import org.apache.sling.distribution.DistributionRequest;
 import org.apache.sling.distribution.DistributionRequestType;
 import org.apache.sling.distribution.SimpleDistributionRequest;
-import org.apache.sling.distribution.impl.DistributionException;
+import org.apache.sling.distribution.common.DistributionException;
 import org.apache.sling.distribution.trigger.DistributionRequestHandler;
 import org.apache.sling.distribution.trigger.DistributionTrigger;
 import org.apache.sling.distribution.util.DistributionJcrUtils;
@@ -268,7 +268,7 @@ public abstract class AbstractJcrEventTrigger implements DistributionTrigger {
                     } catch (LoginException le) {
                         log.error("cannot obtain resource resolver for {}", serviceUser);
                     } finally {
-                        DistributionUtils.logout(resourceResolver);
+                        DistributionUtils.safelyLogout(resourceResolver);
                     }
                 }
             }
