@@ -30,7 +30,7 @@ under the License.
     </parent>
     <artifactId>sling-server</artifactId>
     <packaging>jar</packaging>
-    <version>9-SNAPSHOT</version>
+    <version>8-SNAPSHOT</version>
     <name>Apache Sling Launchpad Debian Package Builder</name>
     <description>
         Simple packaged installation for sling launchpad standalone jar
