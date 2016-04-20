@@ -38,6 +38,7 @@ else
 	exit -1
 fi
 
+SLING_JAR=${SLING_EXEC}/org.apache.sling.launchpad.jar
 PID=/var/run/sling.pid
 DAEMON=$(which java)
 NAME="sling"
@@ -48,7 +49,12 @@ function usage () {
 }
 
 function stop () {
-	killproc -p $PID $DAEMON TERM
+
+	if [ ! -r /proc/$(cat $PID)/status ] ; then
+		pgrep -f ${SLING_JAR} > $PID
+	fi
+	killproc -p $PID $DAEMON
+	pidofproc -p $PID $DAEMON > /dev/null
 }
 
 function start () {
@@ -60,7 +66,6 @@ function start () {
 
 	check_sling_permissions
 
-	SLING_JAR=${SLING_EXEC}/org.apache.sling.launchpad.jar
 
 	log_progress_msg "Start sling daemon"
 	if start-stop-daemon --start \
@@ -95,8 +100,12 @@ fi
 
 case $1 in
 	start)
-		start
-		;;
+		if pidofproc -p $PID $DAEMON > /dev/null ; then
+				log_warning_msg "Already running"
+		else
+				start
+		fi
+		;;	
 	stop)
 		stop
 		;;
